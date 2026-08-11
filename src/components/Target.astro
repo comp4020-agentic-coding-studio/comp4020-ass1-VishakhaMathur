@@ -1,0 +1,51 @@
+---
+// A simple car, used as the "hit this" target for the aiming challenges.
+interface Props {
+  x: number;
+  y: number;
+  scale?: number;
+  hit?: boolean;
+  testid?: string;
+}
+
+const { x, y, scale = 1, hit = false, testid = "target" } = Astro.props;
+const bodyColor = hit ? "#5cb85c" : "#e63946";
+---
+
+<g
+  data-testid={testid}
+  data-x={x}
+  data-y={y}
+  data-hit={hit}
+  transform={`translate(${x}, ${y}) scale(${scale})`}
+  class="target"
+>
+  <!-- wheels -->
+  <circle cx="-18" cy="14" r="7" fill="#2b2d2f" />
+  <circle cx="18" cy="14" r="7" fill="#2b2d2f" />
+  <circle cx="-18" cy="14" r="2.5" fill="#7d7d7d" />
+  <circle cx="18" cy="14" r="2.5" fill="#7d7d7d" />
+
+  <!-- body -->
+  <path
+    d="M -32 12
+       L -28 -2
+       Q -22 -12 -10 -12
+       L 10 -12
+       Q 20 -12 25 -2
+       L 32 12
+       Z"
+    fill={bodyColor}
+    stroke="#1a1a1a"
+    stroke-width="1.5"
+  />
+
+  <!-- windows -->
+  <path d="M -18 -3 L -14 -9 L 6 -9 L 9 -3 Z" fill="#cfe8ff" opacity="0.9" />
+</g>
+
+<style>
+  .target {
+    transition: fill 0.2s ease;
+  }
+</style>

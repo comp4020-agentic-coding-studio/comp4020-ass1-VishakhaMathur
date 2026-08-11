@@ -1,0 +1,16 @@
+---
+interface Props {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  testid?: string;
+}
+
+const { x1, y1, x2, y2, testid = "mirror" } = Astro.props;
+---
+
+<g data-testid={testid} data-x1={x1} data-y1={y1} data-x2={x2} data-y2={y2} class="mirror">
+  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#7fb3d5" stroke-width="6" stroke-linecap="round" />
+  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#eaf6ff" stroke-width="2" stroke-linecap="round" />
+</g>

@@ -1,5 +1,17 @@
 ---
 import "../styles/global.css";
+import LightSource from "../components/LightSource.astro";
+import Mirror from "../components/Mirror.astro";
+import LightRay from "../components/LightRay.astro";
+import NormalLine from "../components/NormalLine.astro";
+import Target from "../components/Target.astro";
+
+// Fixed scene geometry. The point of incidence stays put; dragging the
+// light source is what changes the incident (and therefore reflected) ray.
+const MIRROR = { x1: 150, y1: 400, x2: 650, y2: 400, angleDeg: 0 };
+const INCIDENCE_POINT = { x: 400, y: 400 };
+const INITIAL_SOURCE = { x: 250, y: 150 };
+const TARGET = { x: 580, y: 160 };
 ---
 
 <!doctype html>
@@ -7,7 +19,7 @@ import "../styles/global.css";
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>COMP4020 prototype</title>
+    <title>The laws of reflection</title>
   </head>
   <body>
     <header>
@@ -16,16 +28,158 @@ import "../styles/global.css";
       </nav>
     </header>
     <main>
-      <h1>COMP4020 prototype</h1>
+      <h1>The laws of reflection</h1>
       <p data-testid="intro">
-        Replace this with your prototype. This week's brief is on the course website;
-        <code>spec/README.md</code> explains how the checks in this repo relate to it.
+        Drag the light source. Watch the incident ray, the normal, and the reflected ray —
+        the angle of incidence always equals the angle of reflection.
+      </p>
+
+      <svg
+        data-testid="reflection-scene"
+        viewBox="0 0 800 500"
+        role="img"
+        aria-label="A draggable light source aimed at a mirror, with its reflected ray"
+      >
+        <NormalLine x={INCIDENCE_POINT.x} y={INCIDENCE_POINT.y} mirrorAngleDeg={MIRROR.angleDeg} length={160} />
+        <Mirror x1={MIRROR.x1} y1={MIRROR.y1} x2={MIRROR.x2} y2={MIRROR.y2} />
+        <Target x={TARGET.x} y={TARGET.y} testid="target" />
+        <LightRay
+          testid="incident-ray"
+          x1={INITIAL_SOURCE.x}
+          y1={INITIAL_SOURCE.y}
+          x2={INCIDENCE_POINT.x}
+          y2={INCIDENCE_POINT.y}
+          color="#ff6b35"
+        />
+        <LightRay
+          testid="reflected-ray"
+          x1={INCIDENCE_POINT.x}
+          y1={INCIDENCE_POINT.y}
+          x2={INCIDENCE_POINT.x}
+          y2={INCIDENCE_POINT.y}
+          color="#2a9d8f"
+        />
+        <LightSource x={INITIAL_SOURCE.x} y={INITIAL_SOURCE.y} />
+      </svg>
+
+      <p aria-live="polite">
+        Angle of incidence: <span data-testid="angle-readout">–</span>°
+        <span data-testid="hit-status" data-hit="false">Target not hit yet</span>
       </p>
     </main>
     <script>
-      const intro = document.querySelector<HTMLElement>('[data-testid="intro"]');
-      if (intro) {
-        intro.dataset.ready = "true";
+      // A normal (bundled, type="module") script, not define:vars — that
+      // inlines its script unprocessed, so a relative import of a .ts
+      // source file would 404 once built. Instead every value this needs
+      // is read back from the data-* attributes the components above
+      // already rendered, so there's one source of truth for the geometry.
+      import { computeReflectedRay, distancePointToRaySegment } from "../lib/reflection";
+
+      const scene = document.querySelector<SVGSVGElement>('[data-testid="reflection-scene"]');
+      const sourceEl = document.querySelector<SVGGElement>('[data-testid="light-source"]');
+      const incidentLine = document.querySelector<SVGLineElement>(
+        '[data-testid="incident-ray"] line',
+      );
+      const reflectedLine = document.querySelector<SVGLineElement>(
+        '[data-testid="reflected-ray"] line',
+      );
+      const normalEl = document.querySelector<SVGGElement>('[data-testid="normal-line"]');
+      const targetEl = document.querySelector<SVGGElement>('[data-testid="target"]');
+      const angleReadout = document.querySelector('[data-testid="angle-readout"]');
+      const hitStatus = document.querySelector<HTMLElement>('[data-testid="hit-status"]');
+
+      if (scene && sourceEl && incidentLine && reflectedLine && normalEl && targetEl) {
+        const incidencePoint = {
+          x: Number(normalEl.dataset.x),
+          y: Number(normalEl.dataset.y),
+        };
+        const mirrorAngleDeg = Number(normalEl.dataset.mirrorAngleDeg);
+        const target = { x: Number(targetEl.dataset.x), y: Number(targetEl.dataset.y) };
+        const viewBox = scene.viewBox.baseVal;
+        const rayLength = Math.hypot(viewBox.width, viewBox.height);
+        const hitRadius = 24;
+        const bounds = { minX: 40, maxX: viewBox.width - 40, minY: 40, maxY: incidencePoint.y - 40 };
+
+        function clamp(value: number, min: number, max: number): number {
+          return Math.min(max, Math.max(min, value));
+        }
+
+        function clientToSceneCoords(clientX: number, clientY: number) {
+          const ctm = scene!.getScreenCTM();
+          if (!ctm) return { x: 0, y: 0 };
+          const point = scene!.createSVGPoint();
+          point.x = clientX;
+          point.y = clientY;
+          const scenePoint = point.matrixTransform(ctm.inverse());
+          return { x: scenePoint.x, y: scenePoint.y };
+        }
+
+        function render(source: { x: number; y: number }) {
+          sourceEl!.setAttribute("transform", `translate(${source.x}, ${source.y})`);
+          sourceEl!.dataset.x = String(source.x);
+          sourceEl!.dataset.y = String(source.y);
+
+          incidentLine!.setAttribute("x1", String(source.x));
+          incidentLine!.setAttribute("y1", String(source.y));
+          incidentLine!.setAttribute("x2", String(incidencePoint.x));
+          incidentLine!.setAttribute("y2", String(incidencePoint.y));
+
+          const { incidenceAngleDeg, reflectedPoint } = computeReflectedRay(
+            source,
+            incidencePoint,
+            mirrorAngleDeg,
+            rayLength,
+          );
+
+          reflectedLine!.setAttribute("x1", String(incidencePoint.x));
+          reflectedLine!.setAttribute("y1", String(incidencePoint.y));
+          reflectedLine!.setAttribute("x2", String(reflectedPoint.x));
+          reflectedLine!.setAttribute("y2", String(reflectedPoint.y));
+
+          if (angleReadout) {
+            angleReadout.textContent = incidenceAngleDeg.toFixed(1);
+          }
+
+          const direction = {
+            x: reflectedPoint.x - incidencePoint.x,
+            y: reflectedPoint.y - incidencePoint.y,
+          };
+          const distance = distancePointToRaySegment(target, incidencePoint, direction, rayLength);
+          const hit = distance <= hitRadius;
+          targetEl!.dataset.hit = String(hit);
+          if (hitStatus) {
+            hitStatus.dataset.hit = String(hit);
+            hitStatus.textContent = hit ? "Target hit!" : "Target not hit yet";
+          }
+        }
+
+        let dragging = false;
+        let source = {
+          x: Number(sourceEl.dataset.x) || 0,
+          y: Number(sourceEl.dataset.y) || 0,
+        };
+
+        sourceEl.addEventListener("pointerdown", (event) => {
+          dragging = true;
+          sourceEl!.setPointerCapture(event.pointerId);
+        });
+
+        sourceEl.addEventListener("pointermove", (event) => {
+          if (!dragging) return;
+          const { x, y } = clientToSceneCoords(event.clientX, event.clientY);
+          source = { x: clamp(x, bounds.minX, bounds.maxX), y: clamp(y, bounds.minY, bounds.maxY) };
+          render(source);
+        });
+
+        function stopDragging(event: PointerEvent) {
+          dragging = false;
+          sourceEl!.releasePointerCapture(event.pointerId);
+        }
+
+        sourceEl.addEventListener("pointerup", stopDragging);
+        sourceEl.addEventListener("pointercancel", stopDragging);
+
+        render(source);
       }
     </script>
   </body>
