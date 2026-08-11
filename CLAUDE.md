@@ -114,6 +114,21 @@ generators (Astro included) need `base` set explicitly, and getting it wrong
 looks fine locally while every asset 404s on the live URL. And commit the
 updated `pnpm-lock.yaml`: CI installs with `--frozen-lockfile`.
 
+### This repo: swapped to Astro
+
+Pages live in `src/pages/*.astro`, styles in `src/styles/`. `astro.config.mjs`
+sets `base: "/comp4020-ass1-VishakhaMathur"` for the deployed subpath, and
+`typecheck` runs `astro check` instead of bare `tsc`.
+
+Write internal nav links as **relative paths** (`href="./"`, `href="./about/"`),
+not `import.meta.env.BASE_URL` or any absolute `/...` path. An absolute
+base-prefixed link resolves fine once deployed, but `pnpm dlx linkinator ./dist`
+(what both the local links check and CI's "Check internal links" step run)
+scans `dist/` as a plain directory with no notion of the subpath, so it 404s on
+exactly the link that works live. Relative links resolve correctly in both
+places, which is also why the original Vite config sidestepped this with
+`base: "./"`.
+
 ## Your process is part of the mark
 
 The deployed page is only half of it. How you got there is marked too: your
