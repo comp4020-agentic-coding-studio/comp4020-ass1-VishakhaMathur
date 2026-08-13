@@ -1,0 +1,19 @@
+---
+interface Props {
+  x: number;
+  y: number;
+  voltage: number;
+  testid?: string;
+}
+
+const { x, y, voltage, testid = "battery" } = Astro.props;
+---
+
+<g data-testid={testid} data-x={x} data-y={y} data-voltage={voltage}>
+  <line x1={x} y1={y - 70} x2={x} y2={y - 45} stroke="#333" stroke-width="3" />
+  <rect x={x - 25} y={y - 45} width="50" height="90" rx="8" fill="#eef0ff" stroke="#4f46e5" stroke-width="2" />
+  <text x={x} y={y - 50} text-anchor="middle" font-size="16">+</text>
+  <text x={x} y={y + 4} text-anchor="middle" font-size="14" font-weight="bold">{voltage}V</text>
+  <text x={x} y={y + 60} text-anchor="middle" font-size="16">−</text>
+  <line x1={x} y1={y + 45} x2={x} y2={y + 70} stroke="#333" stroke-width="3" />
+</g>

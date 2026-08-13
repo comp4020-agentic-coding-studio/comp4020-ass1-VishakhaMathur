@@ -2,29 +2,24 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
+import { current, parallelResistance, seriesResistance } from "../src/lib/circuit";
 
-// Assignment 1's core interaction, per the brief: dragging and aiming the
-// light source changes the incident and reflected rays the visitor sees, and
-// the law of reflection (angle of incidence == angle of reflection) has to
-// hold as they do it.
+// Assignment 1's core interaction, per the brief: switching on a second
+// parallel path lowers the total resistance rather than raising it, and the
+// combined-resistance rule (1/R_total = sum of 1/R_i) has to hold as the
+// visitor toggles paths and drags resistance sliders.
 //
-// These two checks split that in two:
+// These checks split that in two, same shape as this file used before the
+// topic pivot:
 //   - the built page exposes hooks for the interaction (structural, against
 //     dist/ — same style as spec/invariants.test.ts)
-//   - the reflection geometry itself is correct (behavioural, against your
-//     own pure function — jsdom has no real layout, so driving an actual
-//     pointer drag through a built static page isn't a check worth writing)
-//
-// The exact selectors and the reflection function's location below are a
-// starting contract, not a fixed one — once you've built the simulation,
-// update the strings/import path to match what you actually built. Keep the
-// two assertions (hooks exist; angle in == angle out) — those are the part of
-// the spec this file answers.
+//   - the circuit math itself is correct (behavioural, against the pure
+//     functions in src/lib/circuit.ts)
 
 const NEXT_STEP =
   "Update the selector/import in spec/assignment-1.test.ts to match what you built — see the comment at the top of this file.";
 
-describe("core interaction: draggable light source", () => {
+describe("core interaction: switchable parallel paths", () => {
   const distPath = resolve("dist/index.html");
 
   it("built", () => {
@@ -35,43 +30,101 @@ describe("core interaction: draggable light source", () => {
     ? new JSDOM(readFileSync(distPath, "utf8")).window.document
     : null;
 
-  it("exposes the light source as a distinct, labelled element", () => {
-    const lightSource = doc?.querySelector('[data-testid="light-source"]');
-    expect(lightSource, NEXT_STEP).toBeTruthy();
+  it("exposes the bulb and at least two switchable branches as distinct elements", () => {
+    expect(doc?.querySelector('[data-testid="bulb"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="branch-1"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="branch-2"]'), NEXT_STEP).toBeTruthy();
   });
 
-  it("exposes the incident and reflected rays as distinct elements", () => {
-    const incident = doc?.querySelector('[data-testid="incident-ray"]');
-    const reflected = doc?.querySelector('[data-testid="reflected-ray"]');
-    expect(incident, NEXT_STEP).toBeTruthy();
-    expect(reflected, NEXT_STEP).toBeTruthy();
+  it("exposes a toggle and resistance control for each branch", () => {
+    for (const n of [1, 2, 3]) {
+      expect(doc?.querySelector(`[data-testid="toggle-branch-${n}"]`), NEXT_STEP).toBeTruthy();
+      expect(doc?.querySelector(`[data-testid="resistance-slider-${n}"]`), NEXT_STEP).toBeTruthy();
+    }
+  });
+
+  it("exposes live total resistance and current readouts", () => {
+    expect(doc?.querySelector('[data-testid="total-resistance-readout"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="current-readout"]'), NEXT_STEP).toBeTruthy();
   });
 });
 
-describe("law of reflection: angle of incidence equals angle of reflection", () => {
-  it("holds for a range of incident angles", async () => {
-    // Assumed contract: a pure function, decoupled from dragging and DOM,
-    // that takes the incident ray's angle (degrees, measured from the
-    // mirror surface or its normal — pick one and be consistent) and
-    // returns the reflected ray's angle on the same reference.
-    //
-    // import.meta.glob (rather than a plain import) so this file — and
-    // typecheck — stays green before the module exists: an empty match
-    // isn't a module-resolution error, just an empty object.
-    const candidates = import.meta.glob<{ reflect?: (angleDeg: number) => number }>(
-      "../src/lib/reflection.ts",
-    );
-    const modulePath = Object.keys(candidates)[0];
-    const reflect = modulePath ? (await candidates[modulePath]()).reflect : undefined;
+// The brief asks for a guided progression — predict, experiment, discover,
+// apply, then a harder series-plus-parallel challenge — rather than a single
+// free-play circuit. These check the five stages' hooks exist in the built
+// page; the stage-transition logic itself is exercised manually (see
+// PROCESS.md / reflections), same reasoning as the toggle/slider interaction
+// above.
+describe("five-stage progression: hooks for each stage exist", () => {
+  const distPath = resolve("dist/index.html");
+  const doc = existsSync(distPath)
+    ? new JSDOM(readFileSync(distPath, "utf8")).window.document
+    : null;
 
-    expect(reflect, `No reflection function found. ${NEXT_STEP}`).toBeTypeOf("function");
-    if (!reflect) return;
+  it("has stage navigation and progress hooks", () => {
+    expect(doc?.querySelector('[data-testid="stage-progress"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="prev-stage"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="next-stage"]'), NEXT_STEP).toBeTruthy();
+  });
 
-    for (const angle of [5, 15, 30, 45, 60, 75, 85]) {
-      expect(reflect(angle), `reflect(${angle}) should return the same angle`).toBeCloseTo(
-        angle,
-        5,
-      );
-    }
+  it("has predict-stage guess options", () => {
+    expect(doc?.querySelector('[data-testid="predict-guess-up"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="predict-guess-down"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="predict-guess-same"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("states the rule explicitly for the discover stage", () => {
+    expect(doc?.querySelector('[data-testid="rule-statement"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("has a target and status hook for the apply-stage puzzle", () => {
+    expect(doc?.querySelector('[data-testid="puzzle-target"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="puzzle-status"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("has the fixed series resistor and target for the challenge stage", () => {
+    expect(doc?.querySelector('[data-testid="challenge-series-resistor"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="challenge-target"]'), NEXT_STEP).toBeTruthy();
+  });
+});
+
+describe("parallel resistance: combined resistance is never more than the smallest branch", () => {
+  it("halves for two equal resistors", () => {
+    expect(parallelResistance([10, 10])).toBeCloseTo(5, 5);
+  });
+
+  it("drops further as a third equal path closes", () => {
+    const two = parallelResistance([10, 10]);
+    const three = parallelResistance([10, 10, 10]);
+    expect(three).toBeLessThan(two);
+    expect(three).toBeCloseTo(10 / 3, 5);
+  });
+
+  it("is an open circuit (infinite resistance) with no branches", () => {
+    expect(parallelResistance([])).toBe(Infinity);
+  });
+
+  it("matches a single branch's own resistance", () => {
+    expect(parallelResistance([12])).toBeCloseTo(12, 5);
+  });
+});
+
+describe("series resistance: resistors in series simply add", () => {
+  it("sums a fixed resistor with a parallel pair for the challenge stage", () => {
+    const parallelPair = parallelResistance([10, 10]);
+    const total = seriesResistance([8, parallelPair]);
+    expect(total).toBeCloseTo(13, 5);
+  });
+});
+
+describe("Ohm's law: current is voltage over resistance", () => {
+  it("holds for a range of voltage/resistance pairs", () => {
+    expect(current(12, 5)).toBeCloseTo(2.4, 5);
+    expect(current(12, 10)).toBeCloseTo(1.2, 5);
+    expect(current(9, 3)).toBeCloseTo(3, 5);
+  });
+
+  it("is zero for an open circuit", () => {
+    expect(current(12, Infinity)).toBe(0);
   });
 });

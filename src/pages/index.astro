@@ -1,17 +1,24 @@
 ---
 import "../styles/global.css";
-import LightSource from "../components/LightSource.astro";
-import Mirror from "../components/Mirror.astro";
-import LightRay from "../components/LightRay.astro";
-import NormalLine from "../components/NormalLine.astro";
-import Target from "../components/Target.astro";
+import Battery from "../components/Battery.astro";
+import Bulb from "../components/Bulb.astro";
+import Branch from "../components/Branch.astro";
 
-// Fixed scene geometry. The point of incidence stays put; dragging the
-// light source is what changes the incident (and therefore reflected) ray.
-const MIRROR = { x1: 150, y1: 400, x2: 650, y2: 400, angleDeg: 0 };
-const INCIDENCE_POINT = { x: 400, y: 400 };
-const INITIAL_SOURCE = { x: 250, y: 150 };
-const TARGET = { x: 580, y: 160 };
+// Fixed scene geometry: a battery feeds a left bus bar, three parallel
+// branches run between the two bus bars, the right bus bar feeds a bulb, and
+// a return wire closes the loop back to the battery. Branch resistances and
+// on/off state are the only things that change — driven live by the page
+// script, not by re-rendering this markup.
+const VOLTAGE = 12;
+const LEFT_BUS_X = 220;
+const RIGHT_BUS_X = 560;
+const BRANCH_Y = [150, 250, 350];
+const DEFAULT_RESISTANCE = 10;
+const BULB = { x: 650, y: 250 };
+const BATTERY_POS = { x: 100, y: 250 };
+// Only wired into the circuit during the multi-reflection-style challenge
+// stage — a fixed resistor in series before the parallel bank.
+const CHALLENGE_SERIES_R = 8;
 ---
 
 <!doctype html>
@@ -19,167 +26,405 @@ const TARGET = { x: 580, y: 160 };
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The laws of reflection</title>
+    <title>Why more paths means less resistance</title>
   </head>
   <body>
-    <header>
+    <header class="site-header">
       <nav aria-label="Primary">
         <a href="./">Home</a>
       </nav>
     </header>
-    <main>
-      <h1>The laws of reflection</h1>
-      <p data-testid="intro">
-        Drag the light source. Watch the incident ray, the normal, and the reflected ray —
-        the angle of incidence always equals the angle of reflection.
+    <main data-stage="predict">
+      <h1 class="title">Why more paths means less resistance</h1>
+      <p class="intro" data-testid="intro">
+        Most people expect adding a wire to a circuit to add resistance. It's the opposite: explore
+        why in five stages — predict what a second path does, experiment by switching paths on and
+        tuning them, discover the rule, then apply it to a target and a trickier series-plus-parallel
+        challenge.
+      </p>
+
+      <p class="stage-progress" data-testid="stage-progress" aria-live="polite">
+        Stage 1 of 5 — Predict
+      </p>
+      <p class="instructions" data-testid="stage-instructions" aria-live="polite">
+        Path 1 alone carries the current at 10Ω. If we also close a second 10Ω path in parallel,
+        what happens to the total resistance?
+      </p>
+      <p class="callout" data-testid="rule-statement" data-visible-in="discover" {...{ hidden: true }}>
+        1/R<sub>total</sub> = 1/R<sub>1</sub> + 1/R<sub>2</sub> + … — every closed path is another
+        route for current, so the total resistance can only go down (or stay the same) as you close
+        more of them. It never goes up.
       </p>
 
       <svg
-        data-testid="reflection-scene"
+        class="circuit-scene"
+        data-testid="circuit-scene"
         viewBox="0 0 800 500"
         role="img"
-        aria-label="A draggable light source aimed at a mirror, with its reflected ray"
+        aria-label="A battery driving current through three switchable parallel resistor paths into a bulb"
       >
-        <NormalLine x={INCIDENCE_POINT.x} y={INCIDENCE_POINT.y} mirrorAngleDeg={MIRROR.angleDeg} length={160} />
-        <Mirror x1={MIRROR.x1} y1={MIRROR.y1} x2={MIRROR.x2} y2={MIRROR.y2} />
-        <Target x={TARGET.x} y={TARGET.y} testid="target" />
-        <LightRay
-          testid="incident-ray"
-          x1={INITIAL_SOURCE.x}
-          y1={INITIAL_SOURCE.y}
-          x2={INCIDENCE_POINT.x}
-          y2={INCIDENCE_POINT.y}
-          color="#ff6b35"
+        <line x1={BATTERY_POS.x} y1={180} x2={LEFT_BUS_X} y2={180} stroke="#333" stroke-width="3" />
+        <line
+          x1={LEFT_BUS_X}
+          y1={BRANCH_Y[0]}
+          x2={LEFT_BUS_X}
+          y2={BRANCH_Y[2]}
+          stroke="#333"
+          stroke-width="3"
         />
-        <LightRay
-          testid="reflected-ray"
-          x1={INCIDENCE_POINT.x}
-          y1={INCIDENCE_POINT.y}
-          x2={INCIDENCE_POINT.x}
-          y2={INCIDENCE_POINT.y}
-          color="#2a9d8f"
+        <line
+          x1={RIGHT_BUS_X}
+          y1={BRANCH_Y[0]}
+          x2={RIGHT_BUS_X}
+          y2={BRANCH_Y[2]}
+          stroke="#333"
+          stroke-width="3"
         />
-        <LightSource x={INITIAL_SOURCE.x} y={INITIAL_SOURCE.y} />
+        <line
+          x1={RIGHT_BUS_X}
+          y1={BRANCH_Y[1]}
+          x2={BULB.x - 26}
+          y2={BRANCH_Y[1]}
+          stroke="#333"
+          stroke-width="3"
+        />
+        <line x1={BULB.x} y1={BULB.y + 40} x2={BULB.x} y2="430" stroke="#333" stroke-width="3" />
+        <line x1={BULB.x} y1="430" x2={BATTERY_POS.x} y2="430" stroke="#333" stroke-width="3" />
+        <line
+          x1={BATTERY_POS.x}
+          y1="430"
+          x2={BATTERY_POS.x}
+          y2={BATTERY_POS.y + 45}
+          stroke="#333"
+          stroke-width="3"
+        />
+
+        <g data-testid="challenge-series-resistor" data-visible-in="multi" {...{ hidden: true }}>
+          <rect x={LEFT_BUS_X - 55} y={165} width="40" height="20" rx="3" fill="#fff3cd" stroke="#e63946" stroke-width="2" />
+          <text x={LEFT_BUS_X - 35} y={160} text-anchor="middle" font-size="12">{CHALLENGE_SERIES_R}Ω</text>
+        </g>
+
+        <Branch testid="branch-1" x1={LEFT_BUS_X} x2={RIGHT_BUS_X} y={BRANCH_Y[0]} resistanceOhms={DEFAULT_RESISTANCE} />
+        <Branch testid="branch-2" x1={LEFT_BUS_X} x2={RIGHT_BUS_X} y={BRANCH_Y[1]} resistanceOhms={DEFAULT_RESISTANCE} />
+        <Branch testid="branch-3" x1={LEFT_BUS_X} x2={RIGHT_BUS_X} y={BRANCH_Y[2]} resistanceOhms={DEFAULT_RESISTANCE} />
+
+        <Battery x={BATTERY_POS.x} y={BATTERY_POS.y} voltage={VOLTAGE} />
+        <Bulb x={BULB.x} y={BULB.y} />
       </svg>
 
-      <p aria-live="polite">
-        Angle of incidence: <span data-testid="angle-readout">–</span>°
-        <span data-testid="hit-status" data-hit="false">Target not hit yet</span>
+      <p class="readout" aria-live="polite">
+        <span>Total resistance: <strong data-testid="total-resistance-readout">–</strong>Ω</span>
+        <span>Current: <strong data-testid="current-readout">–</strong>A</span>
+      </p>
+
+      <div class="controls">
+        <div class="control">
+          <button type="button" data-testid="toggle-branch-1" aria-pressed="true">Path 1: ON</button>
+          <label>
+            {DEFAULT_RESISTANCE}Ω
+            <input type="range" data-testid="resistance-slider-1" min="5" max="50" value={DEFAULT_RESISTANCE} />
+          </label>
+        </div>
+        <div class="control">
+          <button type="button" data-testid="toggle-branch-2" aria-pressed="false">Path 2: OFF</button>
+          <label>
+            {DEFAULT_RESISTANCE}Ω
+            <input type="range" data-testid="resistance-slider-2" min="5" max="50" value={DEFAULT_RESISTANCE} disabled />
+          </label>
+        </div>
+        <div class="control">
+          <button type="button" data-testid="toggle-branch-3" aria-pressed="false">Path 3: OFF</button>
+          <label>
+            {DEFAULT_RESISTANCE}Ω
+            <input type="range" data-testid="resistance-slider-3" min="5" max="50" value={DEFAULT_RESISTANCE} disabled />
+          </label>
+        </div>
+      </div>
+
+      <div class="predict-panel" data-visible-in="predict" data-testid="predict-controls">
+        <p class="predict-guess">
+          <button type="button" data-testid="predict-guess-up">Goes up</button>
+          <button type="button" data-testid="predict-guess-down">Goes down</button>
+          <button type="button" data-testid="predict-guess-same">Stays the same</button>
+        </p>
+        <p class="feedback" data-testid="predict-feedback" aria-live="polite"></p>
+      </div>
+
+      <div class="panel" data-visible-in="apply" data-testid="puzzle" {...{ hidden: true }}>
+        <p data-testid="puzzle-target">Target: get the total resistance to 4Ω or less.</p>
+        <p class="status" data-testid="puzzle-status" data-solved="false" aria-live="polite">Not solved yet.</p>
+      </div>
+
+      <div class="panel" data-visible-in="multi" data-testid="challenge" {...{ hidden: true }}>
+        <p data-testid="challenge-target">
+          A fixed {CHALLENGE_SERIES_R}Ω resistor now sits in series before your parallel paths.
+          Target: get the current between 0.55A and 0.65A.
+        </p>
+        <p class="status" data-testid="challenge-status" data-solved="false" aria-live="polite">Not solved yet.</p>
+      </div>
+
+      <p class="stage-nav">
+        <button type="button" data-testid="prev-stage" disabled>← Previous</button>
+        <button type="button" data-testid="next-stage" disabled>Next stage →</button>
       </p>
     </main>
     <script>
-      // A normal (bundled, type="module") script, not define:vars — that
-      // inlines its script unprocessed, so a relative import of a .ts
-      // source file would 404 once built. Instead every value this needs
-      // is read back from the data-* attributes the components above
-      // already rendered, so there's one source of truth for the geometry.
-      import { computeReflectedRay, distancePointToRaySegment } from "../lib/reflection";
+      // A normal (bundled, type="module") script, not define:vars — see
+      // src/pages/index.astro's git history for why (carried forward from
+      // the reflection prototype this replaced). Every value this needs is
+      // read back from the data-* attributes the components above already
+      // rendered, so there's one source of truth for the circuit geometry.
+      import { current, parallelResistance, seriesResistance } from "../lib/circuit";
 
-      const scene = document.querySelector<SVGSVGElement>('[data-testid="reflection-scene"]');
-      const sourceEl = document.querySelector<SVGGElement>('[data-testid="light-source"]');
-      const incidentLine = document.querySelector<SVGLineElement>(
-        '[data-testid="incident-ray"] line',
-      );
-      const reflectedLine = document.querySelector<SVGLineElement>(
-        '[data-testid="reflected-ray"] line',
-      );
-      const normalEl = document.querySelector<SVGGElement>('[data-testid="normal-line"]');
-      const targetEl = document.querySelector<SVGGElement>('[data-testid="target"]');
-      const angleReadout = document.querySelector('[data-testid="angle-readout"]');
-      const hitStatus = document.querySelector<HTMLElement>('[data-testid="hit-status"]');
+      interface Stage {
+        id: "predict" | "experiment" | "discover" | "apply" | "multi";
+        title: string;
+        instructions: string;
+        interactive: boolean;
+      }
 
-      if (scene && sourceEl && incidentLine && reflectedLine && normalEl && targetEl) {
-        const incidencePoint = {
-          x: Number(normalEl.dataset.x),
-          y: Number(normalEl.dataset.y),
+      const STAGES: Stage[] = [
+        {
+          id: "predict",
+          title: "Predict",
+          instructions:
+            "Path 1 alone carries the current at 10Ω. If we also close a second 10Ω path in parallel, what happens to the total resistance?",
+          interactive: false,
+        },
+        {
+          id: "experiment",
+          title: "Experiment",
+          instructions:
+            "Switch paths on and off and drag their resistance sliders — watch the total resistance, current, and bulb respond live.",
+          interactive: true,
+        },
+        {
+          id: "discover",
+          title: "Discover the rule",
+          instructions: "Keep experimenting and compare against the rule stated below.",
+          interactive: true,
+        },
+        {
+          id: "apply",
+          title: "Apply it",
+          instructions: "Switch on and tune paths until the total resistance is 4Ω or less.",
+          interactive: true,
+        },
+        {
+          id: "multi",
+          title: "Series + parallel challenge",
+          instructions:
+            "A fixed resistor now sits in series before your parallel paths — tune them until the current reaches the target.",
+          interactive: true,
+        },
+      ];
+
+      const VOLTAGE = 12;
+      const CHALLENGE_SERIES_R = 8;
+      const PUZZLE_TARGET_R = 4;
+      // A band, not a "reach at least X" threshold: leftover branch state
+      // from the apply-stage puzzle (low parallel resistance) already
+      // clears any simple lower bound once the series resistor is added, so
+      // the challenge would be solved before the visitor touches anything.
+      // A narrow band forces deliberate tuning of the combined network.
+      const CHALLENGE_TARGET_CURRENT_LOW = 0.55;
+      const CHALLENGE_TARGET_CURRENT_HIGH = 0.65;
+      const BRIGHTNESS_MAX_CURRENT = 4;
+
+      const main = document.querySelector("main");
+      const totalResistanceReadout = document.querySelector('[data-testid="total-resistance-readout"]');
+      const currentReadout = document.querySelector('[data-testid="current-readout"]');
+      const bulbEl = document.querySelector<SVGGElement>('[data-testid="bulb"]');
+      const bulbGlowEl = document.querySelector<SVGCircleElement>(".bulb-glow");
+      const stageProgress = document.querySelector('[data-testid="stage-progress"]');
+      const stageInstructions = document.querySelector('[data-testid="stage-instructions"]');
+      const prevBtn = document.querySelector<HTMLButtonElement>('[data-testid="prev-stage"]');
+      const nextBtn = document.querySelector<HTMLButtonElement>('[data-testid="next-stage"]');
+      const puzzleStatus = document.querySelector<HTMLElement>('[data-testid="puzzle-status"]');
+      const challengeStatus = document.querySelector<HTMLElement>('[data-testid="challenge-status"]');
+      const predictFeedback = document.querySelector<HTMLElement>('[data-testid="predict-feedback"]');
+      const guessButtons = {
+        up: document.querySelector<HTMLButtonElement>('[data-testid="predict-guess-up"]'),
+        down: document.querySelector<HTMLButtonElement>('[data-testid="predict-guess-down"]'),
+        same: document.querySelector<HTMLButtonElement>('[data-testid="predict-guess-same"]'),
+      };
+
+      interface BranchEls {
+        group: SVGGElement | null;
+        switchClosed: SVGLineElement | null;
+        switchOpen: SVGGElement | null;
+        label: SVGTextElement | null;
+        toggleBtn: HTMLButtonElement | null;
+        slider: HTMLInputElement | null;
+      }
+
+      function branchEls(n: number): BranchEls {
+        return {
+          group: document.querySelector<SVGGElement>(`[data-testid="branch-${n}"]`),
+          switchClosed: document.querySelector<SVGLineElement>(`[data-testid="branch-${n}-switch-closed"]`),
+          switchOpen: document.querySelector<SVGGElement>(`[data-testid="branch-${n}-switch-open"]`),
+          label: document.querySelector<SVGTextElement>(`[data-testid="branch-${n}-label"]`),
+          toggleBtn: document.querySelector<HTMLButtonElement>(`[data-testid="toggle-branch-${n}"]`),
+          slider: document.querySelector<HTMLInputElement>(`[data-testid="resistance-slider-${n}"]`),
         };
-        const mirrorAngleDeg = Number(normalEl.dataset.mirrorAngleDeg);
-        const target = { x: Number(targetEl.dataset.x), y: Number(targetEl.dataset.y) };
-        const viewBox = scene.viewBox.baseVal;
-        const rayLength = Math.hypot(viewBox.width, viewBox.height);
-        const hitRadius = 24;
-        const bounds = { minX: 40, maxX: viewBox.width - 40, minY: 40, maxY: incidencePoint.y - 40 };
+      }
+
+      const challengeResistorEl = document.querySelector<SVGGElement>(
+        '[data-testid="challenge-series-resistor"]',
+      );
+
+      if (main && totalResistanceReadout && currentReadout && bulbEl && bulbGlowEl && prevBtn && nextBtn) {
+        const branches = [1, 2, 3].map((n) => branchEls(n));
+        const state = [
+          { enabled: true, resistance: 10 },
+          { enabled: false, resistance: 10 },
+          { enabled: false, resistance: 10 },
+        ];
+
+        let stageIndex = 0;
+        let guessRevealed = false;
+        const completedStages = new Set<string>();
+
+        function setHidden(el: Element | null, hidden: boolean) {
+          if (!el) return;
+          if (hidden) el.setAttribute("hidden", "");
+          else el.removeAttribute("hidden");
+        }
 
         function clamp(value: number, min: number, max: number): number {
           return Math.min(max, Math.max(min, value));
         }
 
-        function clientToSceneCoords(clientX: number, clientY: number) {
-          const ctm = scene!.getScreenCTM();
-          if (!ctm) return { x: 0, y: 0 };
-          const point = scene!.createSVGPoint();
-          point.x = clientX;
-          point.y = clientY;
-          const scenePoint = point.matrixTransform(ctm.inverse());
-          return { x: scenePoint.x, y: scenePoint.y };
+        function applyStageVisibility(stageId: string) {
+          document.querySelectorAll("[data-visible-in]").forEach((el) => {
+            const allowed = (el.getAttribute("data-visible-in") ?? "").split(" ");
+            setHidden(el, !allowed.includes(stageId));
+          });
         }
 
-        function render(source: { x: number; y: number }) {
-          sourceEl!.setAttribute("transform", `translate(${source.x}, ${source.y})`);
-          sourceEl!.dataset.x = String(source.x);
-          sourceEl!.dataset.y = String(source.y);
+        function updateNextButtonState() {
+          const stage = STAGES[stageIndex];
+          const complete =
+            stage.id === "predict"
+              ? guessRevealed
+              : stage.id === "experiment" || stage.id === "discover"
+                ? true
+                : completedStages.has(stage.id);
+          const isLast = stageIndex === STAGES.length - 1;
+          nextBtn!.disabled = isLast || !complete;
+          nextBtn!.textContent = isLast && complete ? "All stages complete!" : "Next stage →";
+        }
 
-          incidentLine!.setAttribute("x1", String(source.x));
-          incidentLine!.setAttribute("y1", String(source.y));
-          incidentLine!.setAttribute("x2", String(incidencePoint.x));
-          incidentLine!.setAttribute("y2", String(incidencePoint.y));
+        function render() {
+          const stage = STAGES[stageIndex];
+          const enabledResistances = state.filter((b) => b.enabled).map((b) => b.resistance);
+          const parallelR = parallelResistance(enabledResistances);
+          const totalR = stage.id === "multi" ? seriesResistance([CHALLENGE_SERIES_R, parallelR]) : parallelR;
+          const currentVal = current(VOLTAGE, totalR);
 
-          const { incidenceAngleDeg, reflectedPoint } = computeReflectedRay(
-            source,
-            incidencePoint,
-            mirrorAngleDeg,
-            rayLength,
-          );
+          totalResistanceReadout!.textContent = Number.isFinite(totalR) ? totalR.toFixed(2) : "∞";
+          currentReadout!.textContent = currentVal.toFixed(2);
 
-          reflectedLine!.setAttribute("x1", String(incidencePoint.x));
-          reflectedLine!.setAttribute("y1", String(incidencePoint.y));
-          reflectedLine!.setAttribute("x2", String(reflectedPoint.x));
-          reflectedLine!.setAttribute("y2", String(reflectedPoint.y));
+          const brightness = clamp(currentVal / BRIGHTNESS_MAX_CURRENT, 0, 1);
+          bulbGlowEl!.setAttribute("opacity", String(brightness));
+          bulbEl!.dataset.brightness = String(brightness);
 
-          if (angleReadout) {
-            angleReadout.textContent = incidenceAngleDeg.toFixed(1);
+          branches.forEach((els, i) => {
+            const b = state[i];
+            els.group?.classList.toggle("off", !b.enabled);
+            setHidden(els.switchClosed, !b.enabled);
+            setHidden(els.switchOpen, b.enabled);
+            if (els.label) els.label.textContent = `${b.resistance}Ω`;
+            if (els.toggleBtn) {
+              els.toggleBtn.textContent = `Path ${i + 1}: ${b.enabled ? "ON" : "OFF"}`;
+              els.toggleBtn.setAttribute("aria-pressed", String(b.enabled));
+              els.toggleBtn.disabled = !stage.interactive;
+            }
+            if (els.slider) {
+              els.slider.disabled = !stage.interactive || !b.enabled;
+            }
+          });
+
+          if (challengeResistorEl) setHidden(challengeResistorEl, stage.id !== "multi");
+
+          if (stage.id === "apply") {
+            const solved = totalR <= PUZZLE_TARGET_R;
+            if (solved) completedStages.add("apply");
+            if (puzzleStatus) {
+              puzzleStatus.dataset.solved = String(solved);
+              puzzleStatus.textContent = solved
+                ? `Solved! Total resistance is ${totalR.toFixed(2)}Ω.`
+                : "Not solved yet.";
+            }
           }
 
-          const direction = {
-            x: reflectedPoint.x - incidencePoint.x,
-            y: reflectedPoint.y - incidencePoint.y,
-          };
-          const distance = distancePointToRaySegment(target, incidencePoint, direction, rayLength);
-          const hit = distance <= hitRadius;
-          targetEl!.dataset.hit = String(hit);
-          if (hitStatus) {
-            hitStatus.dataset.hit = String(hit);
-            hitStatus.textContent = hit ? "Target hit!" : "Target not hit yet";
+          if (stage.id === "multi") {
+            const solved =
+              currentVal >= CHALLENGE_TARGET_CURRENT_LOW && currentVal <= CHALLENGE_TARGET_CURRENT_HIGH;
+            if (solved) completedStages.add("multi");
+            if (challengeStatus) {
+              challengeStatus.dataset.solved = String(solved);
+              challengeStatus.textContent = solved
+                ? `Solved! Current is ${currentVal.toFixed(2)}A.`
+                : "Not solved yet.";
+            }
           }
+
+          updateNextButtonState();
         }
 
-        let dragging = false;
-        let source = {
-          x: Number(sourceEl.dataset.x) || 0,
-          y: Number(sourceEl.dataset.y) || 0,
-        };
-
-        sourceEl.addEventListener("pointerdown", (event) => {
-          dragging = true;
-          sourceEl!.setPointerCapture(event.pointerId);
-        });
-
-        sourceEl.addEventListener("pointermove", (event) => {
-          if (!dragging) return;
-          const { x, y } = clientToSceneCoords(event.clientX, event.clientY);
-          source = { x: clamp(x, bounds.minX, bounds.maxX), y: clamp(y, bounds.minY, bounds.maxY) };
-          render(source);
-        });
-
-        function stopDragging(event: PointerEvent) {
-          dragging = false;
-          sourceEl!.releasePointerCapture(event.pointerId);
+        function goToStage(index: number) {
+          stageIndex = clamp(index, 0, STAGES.length - 1);
+          const stage = STAGES[stageIndex];
+          main!.dataset.stage = stage.id;
+          applyStageVisibility(stage.id);
+          if (stageProgress) {
+            stageProgress.textContent = `Stage ${stageIndex + 1} of ${STAGES.length} — ${stage.title}`;
+          }
+          if (stageInstructions) stageInstructions.textContent = stage.instructions;
+          prevBtn!.disabled = stageIndex === 0;
+          Object.values(guessButtons).forEach((btn) => {
+            if (btn) btn.disabled = stage.id !== "predict" || guessRevealed;
+          });
+          render();
         }
 
-        sourceEl.addEventListener("pointerup", stopDragging);
-        sourceEl.addEventListener("pointercancel", stopDragging);
+        branches.forEach((els, i) => {
+          els.toggleBtn?.addEventListener("click", () => {
+            if (!STAGES[stageIndex].interactive) return;
+            state[i].enabled = !state[i].enabled;
+            render();
+          });
+          els.slider?.addEventListener("input", (event) => {
+            state[i].resistance = Number((event.target as HTMLInputElement).value);
+            render();
+          });
+        });
 
-        render(source);
+        function reveal(guess: "up" | "down" | "same") {
+          if (guessRevealed) return;
+          guessRevealed = true;
+          const correct = guess === "down";
+          state[1].enabled = true; // close the second path to show the effect
+          if (predictFeedback) {
+            predictFeedback.textContent = correct
+              ? "Right — closing a second path gives current another route, so total resistance drops from 10Ω to 5Ω."
+              : "Actually it drops — from 10Ω to 5Ω. A second path gives current another route, which can only lower the total resistance.";
+          }
+          Object.values(guessButtons).forEach((btn) => {
+            if (btn) btn.disabled = true;
+          });
+          render();
+        }
+
+        guessButtons.up?.addEventListener("click", () => reveal("up"));
+        guessButtons.down?.addEventListener("click", () => reveal("down"));
+        guessButtons.same?.addEventListener("click", () => reveal("same"));
+
+        prevBtn.addEventListener("click", () => goToStage(stageIndex - 1));
+        nextBtn.addEventListener("click", () => goToStage(stageIndex + 1));
+
+        goToStage(0);
       }
     </script>
   </body>

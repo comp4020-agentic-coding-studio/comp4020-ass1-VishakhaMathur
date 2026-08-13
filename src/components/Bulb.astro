@@ -1,0 +1,31 @@
+---
+// Brightness starts at 0 (data-brightness) and is driven live by the page
+// script via the .bulb-glow element's opacity — no current, no glow.
+interface Props {
+  x: number;
+  y: number;
+  testid?: string;
+}
+
+const { x, y, testid = "bulb" } = Astro.props;
+---
+
+<g data-testid={testid} data-x={x} data-y={y} data-brightness="0">
+  <circle class="bulb-glow" cx={x} cy={y} r="55" fill="#fff3b0" opacity="0" />
+  <circle class="bulb-body" cx={x} cy={y} r="26" fill="#fff9db" stroke="#333" stroke-width="2" />
+  <path
+    class="bulb-filament"
+    d={`M ${x - 10} ${y + 8} L ${x - 4} ${y - 8} L ${x + 4} ${y + 8} L ${x + 10} ${y - 8}`}
+    stroke="#333"
+    stroke-width="1.5"
+    fill="none"
+  />
+  <line x1={x - 14} y1={y + 26} x2={x - 14} y2={y + 40} stroke="#333" stroke-width="3" />
+  <line x1={x + 14} y1={y + 26} x2={x + 14} y2={y + 40} stroke="#333" stroke-width="3" />
+</g>
+
+<style>
+  .bulb-glow {
+    transition: opacity 0.15s ease;
+  }
+</style>
