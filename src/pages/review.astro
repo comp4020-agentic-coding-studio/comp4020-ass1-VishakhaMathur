@@ -1,0 +1,106 @@
+---
+import "../styles/global.css";
+import Header from "../components/Header.astro";
+---
+
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Leave a review — Resistors in Parallel</title>
+    <script is:inline>
+      // Runs before first paint so a returning dark-mode visitor never sees a
+      // flash of the light theme. Kept separate from the bundled module
+      // script below, which only runs after the DOM is parsed.
+      if (localStorage.getItem("theme") === "dark") {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
+  </head>
+  <body>
+    <Header homeHref="../" reviewHref="./" active="review">
+      <h1 class="title">Leave a Review</h1>
+    </Header>
+    <main>
+      <p class="intro" data-testid="intro">
+        Tried out the parallel-resistors simulation? Tell us what you thought — a star rating, a
+        comment, or both.
+      </p>
+
+      <form data-testid="review-form" novalidate>
+        <fieldset class="rating">
+          <legend>Rating</legend>
+          <div class="stars" data-testid="rating-stars" role="radiogroup" aria-label="Rating out of 5">
+            {
+              [1, 2, 3, 4, 5].map((n) => (
+                <button
+                  type="button"
+                  class="star"
+                  data-testid={`rating-star-${n}`}
+                  data-value={n}
+                  role="radio"
+                  aria-checked="false"
+                  aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                >
+                  ★
+                </button>
+              ))
+            }
+          </div>
+        </fieldset>
+
+        <label for="review-comment">Comments (optional)</label>
+        <textarea
+          id="review-comment"
+          data-testid="review-comment"
+          rows="5"
+          placeholder="What worked, what didn't?"></textarea>
+
+        <button type="submit" class="review-submit" data-testid="review-submit">Submit review</button>
+      </form>
+      <p class="feedback" data-testid="review-feedback" aria-live="polite"></p>
+    </main>
+    <script>
+      const form = document.querySelector<HTMLFormElement>('[data-testid="review-form"]');
+      const stars = [1, 2, 3, 4, 5]
+        .map((n) => document.querySelector<HTMLButtonElement>(`[data-testid="rating-star-${n}"]`))
+        .filter((el): el is HTMLButtonElement => el !== null);
+      const comment = document.querySelector<HTMLTextAreaElement>('[data-testid="review-comment"]');
+      const feedback = document.querySelector<HTMLElement>('[data-testid="review-feedback"]');
+
+      if (form && stars.length === 5 && comment && feedback) {
+        let rating = 0;
+
+        function renderRating() {
+          stars.forEach((star, i) => {
+            const value = i + 1;
+            star.setAttribute("aria-checked", String(value === rating));
+            star.classList.toggle("filled", value <= rating);
+          });
+        }
+
+        stars.forEach((star, i) => {
+          star.addEventListener("click", () => {
+            rating = i + 1;
+            renderRating();
+          });
+        });
+
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (rating === 0) {
+            feedback.textContent = "Choose a star rating before submitting.";
+            return;
+          }
+          // Static site, no backend to send this to — the point of this form
+          // is the interaction itself, not storing the review anywhere.
+          feedback.textContent = "Thanks for your review!";
+          rating = 0;
+          renderRating();
+          comment.value = "";
+        });
+      }
+    </script>
+  </body>
+</html>

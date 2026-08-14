@@ -4,10 +4,8 @@ import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 import { current, parallelResistance, seriesResistance } from "../src/lib/circuit";
 
-// Assignment 1's core interaction, per the brief: switching on a second
-// parallel path lowers the total resistance rather than raising it, and the
-// combined-resistance rule (1/R_total = sum of 1/R_i) has to hold as the
-// visitor toggles paths and drags resistance sliders.
+// Assignment 1's core interaction, per the brief: the combined-resistance
+// rule (1/R_total = sum of 1/R_i) has to hold as parallel paths are added.
 //
 // These checks split that in two, same shape as this file used before the
 // topic pivot:
@@ -19,7 +17,12 @@ import { current, parallelResistance, seriesResistance } from "../src/lib/circui
 const NEXT_STEP =
   "Update the selector/import in spec/assignment-1.test.ts to match what you built — see the comment at the top of this file.";
 
-describe("core interaction: switchable parallel paths", () => {
+// A standalone comprehension check on the "same two points" definition.
+// Drag/snap logic isn't reliably testable under jsdom (no real layout, so
+// getBoundingClientRect distances are meaningless), so this only checks the
+// hooks exist and the structural placement; the drag interaction itself is
+// exercised manually.
+describe("parallel connection check: drag-to-connect hooks exist", () => {
   const distPath = resolve("dist/index.html");
 
   it("built", () => {
@@ -30,61 +33,175 @@ describe("core interaction: switchable parallel paths", () => {
     ? new JSDOM(readFileSync(distPath, "utf8")).window.document
     : null;
 
-  it("exposes the bulb and at least two switchable branches as distinct elements", () => {
-    expect(doc?.querySelector('[data-testid="bulb"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="branch-1"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="branch-2"]'), NEXT_STEP).toBeTruthy();
+  it("exposes the parallel-check section", () => {
+    expect(doc?.querySelector('[data-testid="parallel-check"]'), NEXT_STEP).toBeTruthy();
   });
 
-  it("exposes a toggle and resistance control for each branch", () => {
-    for (const n of [1, 2, 3]) {
-      expect(doc?.querySelector(`[data-testid="toggle-branch-${n}"]`), NEXT_STEP).toBeTruthy();
-      expect(doc?.querySelector(`[data-testid="resistance-slider-${n}"]`), NEXT_STEP).toBeTruthy();
+  it("exposes both rails, both slots, and both resistor tiles", () => {
+    expect(doc?.querySelector('[data-testid="parallel-check-rail-left"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="parallel-check-rail-right"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="parallel-check-slot-1"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="parallel-check-slot-2"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="parallel-check-resistor-1"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="parallel-check-resistor-2"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("renders each resistor tile with an image", () => {
+    for (const n of [1, 2]) {
+      expect(
+        doc?.querySelector(`[data-testid="parallel-check-resistor-${n}"] img`),
+        NEXT_STEP,
+      ).toBeTruthy();
     }
   });
 
-  it("exposes live total resistance and current readouts", () => {
-    expect(doc?.querySelector('[data-testid="total-resistance-readout"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="current-readout"]'), NEXT_STEP).toBeTruthy();
+  it("exposes a feedback hook", () => {
+    expect(doc?.querySelector('[data-testid="parallel-check-feedback"]'), NEXT_STEP).toBeTruthy();
   });
 });
 
-// The brief asks for a guided progression — predict, experiment, discover,
-// apply, then a harder series-plus-parallel challenge — rather than a single
-// free-play circuit. These check the five stages' hooks exist in the built
-// page; the stage-transition logic itself is exercised manually (see
-// PROCESS.md / reflections), same reasoning as the toggle/slider interaction
-// above.
-describe("five-stage progression: hooks for each stage exist", () => {
+// A review page (dist/review/index.html — Astro's directory build format)
+// where visitors can leave a star rating and comment. Static site, no
+// backend: submitting just shows a thank-you, nothing is persisted, so same
+// reasoning as above — only the hooks are checked here, the rating/submit/
+// reset interaction is exercised manually.
+describe("review page: rating and comment hooks exist", () => {
+  const distPath = resolve("dist/review/index.html");
+  const doc = existsSync(distPath)
+    ? new JSDOM(readFileSync(distPath, "utf8")).window.document
+    : null;
+
+  it("built", () => {
+    expect(existsSync(distPath), `${distPath} not found — run pnpm build first.`).toBe(true);
+  });
+
+  it("exposes five star-rating buttons and the comment box", () => {
+    for (const n of [1, 2, 3, 4, 5]) {
+      expect(doc?.querySelector(`[data-testid="rating-star-${n}"]`), NEXT_STEP).toBeTruthy();
+    }
+    expect(doc?.querySelector('[data-testid="review-comment"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("exposes a submit button and a feedback hook", () => {
+    expect(doc?.querySelector('[data-testid="review-submit"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="review-feedback"]'), NEXT_STEP).toBeTruthy();
+  });
+});
+
+// A follow-up analogy, revealed once the visitor answers the resistance
+// quiz above: a speed bump stands in for a resistor and a car for current,
+// with a series road (one lane, two bumps) raced against a parallel road
+// (two lanes, one bump each). Same reasoning as the drag-to-connect check
+// above — driving/animation/sound is exercised manually, only the
+// structural hooks are asserted here.
+describe("highway analogy: hooks exist", () => {
   const distPath = resolve("dist/index.html");
   const doc = existsSync(distPath)
     ? new JSDOM(readFileSync(distPath, "utf8")).window.document
     : null;
 
-  it("has stage navigation and progress hooks", () => {
-    expect(doc?.querySelector('[data-testid="stage-progress"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="prev-stage"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="next-stage"]'), NEXT_STEP).toBeTruthy();
+  it("exposes the section, drive button, and sound toggle", () => {
+    expect(doc?.querySelector('[data-testid="highway-analogy"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-drive"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-sound-toggle"]'), NEXT_STEP).toBeTruthy();
   });
 
-  it("has predict-stage guess options", () => {
-    expect(doc?.querySelector('[data-testid="predict-guess-up"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="predict-guess-down"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="predict-guess-same"]'), NEXT_STEP).toBeTruthy();
+  it("exposes the series board with its car and two bumps", () => {
+    expect(doc?.querySelector('[data-testid="highway-series-board"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-series-car"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-series-bump-1"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-series-bump-2"]'), NEXT_STEP).toBeTruthy();
   });
 
-  it("states the rule explicitly for the discover stage", () => {
-    expect(doc?.querySelector('[data-testid="rule-statement"]'), NEXT_STEP).toBeTruthy();
+  it("exposes the parallel board with both cars and both bumps", () => {
+    expect(doc?.querySelector('[data-testid="highway-parallel-board"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-parallel-car-1"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-parallel-car-2"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-parallel-bump-1"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="highway-parallel-bump-2"]'), NEXT_STEP).toBeTruthy();
   });
 
-  it("has a target and status hook for the apply-stage puzzle", () => {
-    expect(doc?.querySelector('[data-testid="puzzle-target"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="puzzle-status"]'), NEXT_STEP).toBeTruthy();
+  it("exposes a comparison readout", () => {
+    expect(doc?.querySelector('[data-testid="highway-comparison"]'), NEXT_STEP).toBeTruthy();
+  });
+});
+
+// The formal derivation, revealed once the visitor presses Drive on the
+// highway section: the same closed parallel circuit as "Check your
+// understanding," with total current I shown splitting into I1/I2 and
+// recombining, alongside the algebraic steps from Ohm's law to
+// 1/R_total = 1/R1 + 1/R2. Structural hooks only, same reasoning as above.
+describe("resistance derivation: hooks exist", () => {
+  const distPath = resolve("dist/index.html");
+  const doc = existsSync(distPath)
+    ? new JSDOM(readFileSync(distPath, "utf8")).window.document
+    : null;
+
+  it("exposes the section and circuit board", () => {
+    expect(doc?.querySelector('[data-testid="derivation"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="derivation-board"]'), NEXT_STEP).toBeTruthy();
   });
 
-  it("has the fixed series resistor and target for the challenge stage", () => {
-    expect(doc?.querySelector('[data-testid="challenge-series-resistor"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="challenge-target"]'), NEXT_STEP).toBeTruthy();
+  it("labels total current splitting into I1/I2 and recombining", () => {
+    expect(doc?.querySelector('[data-testid="derivation-current-i-in"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="derivation-current-i1"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="derivation-current-i2"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="derivation-current-i-out"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("exposes the step-by-step derivation", () => {
+    expect(doc?.querySelector('[data-testid="derivation-steps"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("exposes its own sound toggle for the current-flow hum", () => {
+    expect(doc?.querySelector('[data-testid="derivation-sound-toggle"]'), NEXT_STEP).toBeTruthy();
+  });
+});
+
+// A single master volume slider (Header slot, so it's above every section)
+// that scales the Check-your-understanding, highway, and derivation hums
+// together — structural hook only, same reasoning as above.
+describe("master volume slider: hook exists", () => {
+  const distPath = resolve("dist/index.html");
+  const doc = existsSync(distPath)
+    ? new JSDOM(readFileSync(distPath, "utf8")).window.document
+    : null;
+
+  it("exposes the volume slider", () => {
+    expect(doc?.querySelector('[data-testid="sound-volume-slider"]'), NEXT_STEP).toBeTruthy();
+  });
+});
+
+// The final section, revealed alongside the derivation: the same parallel
+// circuit, but with an adjustable resistor count and sliders, so a visitor
+// can change values or add/remove resistors and watch the total resistance
+// respond live. Unlike the other boards, resistor count varies at runtime —
+// these hooks only check the built page's initial two-resistor state;
+// adding/removing/dragging is exercised manually.
+describe("resistor experiment: hooks exist", () => {
+  const distPath = resolve("dist/index.html");
+  const doc = existsSync(distPath)
+    ? new JSDOM(readFileSync(distPath, "utf8")).window.document
+    : null;
+
+  it("exposes the section, board, and controls panel", () => {
+    expect(doc?.querySelector('[data-testid="experiment"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="experiment-board"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="experiment-controls"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("exposes an add-resistor button and a total-resistance readout", () => {
+    expect(doc?.querySelector('[data-testid="experiment-add-resistor"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="experiment-total"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("exposes both initial resistors with a slider, value readout, and remove button each", () => {
+    for (const n of [1, 2]) {
+      expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}"]`), NEXT_STEP).toBeTruthy();
+      expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}-slider"]`), NEXT_STEP).toBeTruthy();
+      expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}-value"]`), NEXT_STEP).toBeTruthy();
+      expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}-remove"]`), NEXT_STEP).toBeTruthy();
+    }
   });
 });
 
@@ -110,7 +227,7 @@ describe("parallel resistance: combined resistance is never more than the smalle
 });
 
 describe("series resistance: resistors in series simply add", () => {
-  it("sums a fixed resistor with a parallel pair for the challenge stage", () => {
+  it("sums a fixed resistor with a parallel pair", () => {
     const parallelPair = parallelResistance([10, 10]);
     const total = seriesResistance([8, parallelPair]);
     expect(total).toBeCloseTo(13, 5);

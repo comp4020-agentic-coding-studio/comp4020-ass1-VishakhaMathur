@@ -1,24 +1,105 @@
 ---
 import "../styles/global.css";
 import Battery from "../components/Battery.astro";
-import Bulb from "../components/Bulb.astro";
-import Branch from "../components/Branch.astro";
+import Header from "../components/Header.astro";
+import HighwayBump from "../components/HighwayBump.astro";
+import HighwayCar from "../components/HighwayCar.astro";
+import resistorIcon from "../components/resistor.png?url";
+import { parallelResistance } from "../lib/circuit";
 
-// Fixed scene geometry: a battery feeds a left bus bar, three parallel
-// branches run between the two bus bars, the right bus bar feeds a bulb, and
-// a return wire closes the loop back to the battery. Branch resistances and
-// on/off state are the only things that change — driven live by the page
-// script, not by re-rendering this markup.
 const VOLTAGE = 12;
-const LEFT_BUS_X = 220;
-const RIGHT_BUS_X = 560;
-const BRANCH_Y = [150, 250, 350];
 const DEFAULT_RESISTANCE = 10;
-const BULB = { x: 650, y: 250 };
-const BATTERY_POS = { x: 100, y: 250 };
-// Only wired into the circuit during the multi-reflection-style challenge
-// stage — a fixed resistor in series before the parallel bank.
-const CHALLENGE_SERIES_R = 8;
+
+// Comprehension check: an intentionally open circuit — no wire bridges the
+// two rails — until the visitor drags both resistors across the same two
+// rails, closing it with the resistors wired in parallel.
+//
+// Wiring convention deliberately matches the reference current-divider
+// diagram in src/components/Rparallel.png: a left bus and a right bus, each
+// drawn as ONE continuous vertical stroke, with the battery's entry wire
+// meeting the left bus near its top and the return wire meeting the right
+// bus near its bottom. There is no separate wire directly joining the two
+// buses — the only path between them is through whichever branch(es) a
+// resistor bridges — so the circuit can't accidentally short past the
+// resistors.
+const CHECK_VIEWBOX = { width: 460, height: 430 };
+const CHECK_LEFT_X = 130;
+const CHECK_RIGHT_X = 380;
+const CHECK_BRANCH_Y = [90, 170];
+const CHECK_BATTERY = { x: CHECK_LEFT_X, y: 260 };
+const CHECK_BUS_TOP_Y = CHECK_BRANCH_Y[0];
+const CHECK_ENTRY_Y = CHECK_BATTERY.y - 70; // battery's top lead end
+const CHECK_RETURN_Y = CHECK_BATTERY.y + 70; // battery's bottom lead end, and the right bus's bottom
+
+function pct(value: number, total: number): string {
+  return `${(value / total) * 100}%`;
+}
+
+// The resistor icon's own leads already run to its left/right edges (see
+// resistor.png), so sizing a tile to exactly the rail-to-rail span makes its
+// leads land on the rails themselves instead of floating in the gap between
+// them — the icon *is* the wire there, not a badge sitting on top of it.
+const CHECK_SLOT_WIDTH_PCT = pct(CHECK_RIGHT_X - CHECK_LEFT_X, CHECK_VIEWBOX.width);
+const CHECK_SLOT_CENTER_X_PCT = pct((CHECK_LEFT_X + CHECK_RIGHT_X) / 2, CHECK_VIEWBOX.width);
+
+// Traces conventional current's path once the circuit is closed: out the
+// battery's + lead, up the left bus, across both branches in parallel, down
+// the right bus, and back along the return wire into the − lead. Each
+// segment gets its own animated dashes (CSS, driven by .parallel-check's
+// data-solved attribute) rather than one path covering the whole loop, so
+// direction is just "start point -> end point" per segment instead of one
+// long path string to reason about.
+const CHECK_FLOW_SEGMENTS = [
+  { x1: CHECK_LEFT_X, y1: CHECK_ENTRY_Y, x2: CHECK_LEFT_X, y2: CHECK_BUS_TOP_Y },
+  ...CHECK_BRANCH_Y.map((y) => ({ x1: CHECK_LEFT_X, y1: y, x2: CHECK_RIGHT_X, y2: y })),
+  { x1: CHECK_RIGHT_X, y1: CHECK_BUS_TOP_Y, x2: CHECK_RIGHT_X, y2: CHECK_RETURN_Y },
+  { x1: CHECK_RIGHT_X, y1: CHECK_RETURN_Y, x2: CHECK_LEFT_X, y2: CHECK_RETURN_Y },
+];
+
+// Highway analogy: a speed bump stands in for a resistor (HighwayBump reuses
+// a resistor body's own fill/stroke) and a car for current. Both boards
+// share one viewBox so the same pct() math positions either lane layout.
+const HIGHWAY_VIEWBOX = { width: 400, height: 160 };
+const HIGHWAY_START_X = 30;
+const HIGHWAY_FINISH_X = 370;
+const HIGHWAY_SERIES_Y = 80;
+const HIGHWAY_SERIES_BUMPS = [150, 250];
+const HIGHWAY_PARALLEL_LANE_Y = [50, 130];
+const HIGHWAY_PARALLEL_BUMP_X = 200;
+
+// The "try it yourself" experiment: unlike every board above, the resistor
+// count here is adjustable (1-4), so branch positions can't be a fixed
+// 2-element array like CHECK_BRANCH_Y. Instead they redistribute evenly
+// within a fixed band, inside a viewBox whose overall size never changes —
+// so adding/removing a resistor never reflows the rest of the page, only
+// where branches tap into the (always full-height) bus wires.
+const EXPERIMENT_VIEWBOX = { width: 460, height: 430 };
+const EXPERIMENT_LEFT_X = 130;
+const EXPERIMENT_RIGHT_X = 380;
+const EXPERIMENT_BUS_TOP_Y = 90;
+const EXPERIMENT_BRANCH_BAND: [number, number] = [90, 220];
+const EXPERIMENT_ENTRY_Y = 250;
+const EXPERIMENT_BATTERY = { x: EXPERIMENT_LEFT_X, y: 320 };
+const EXPERIMENT_RETURN_Y = 390;
+const EXPERIMENT_MIN_RESISTORS = 1;
+const EXPERIMENT_MAX_RESISTORS = 4;
+const EXPERIMENT_DEFAULT_VALUES = [10, 10];
+
+function experimentBranchYsFor(n: number): number[] {
+  const [top, bottom] = EXPERIMENT_BRANCH_BAND;
+  if (n <= 1) return [(top + bottom) / 2];
+  const step = (bottom - top) / (n - 1);
+  return Array.from({ length: n }, (_, i) => top + i * step);
+}
+
+const experimentBranchYs = experimentBranchYsFor(EXPERIMENT_DEFAULT_VALUES.length);
+const experimentFlowSegments = [
+  { x1: EXPERIMENT_LEFT_X, y1: EXPERIMENT_ENTRY_Y, x2: EXPERIMENT_LEFT_X, y2: EXPERIMENT_BUS_TOP_Y },
+  ...experimentBranchYs.map((y) => ({ x1: EXPERIMENT_LEFT_X, y1: y, x2: EXPERIMENT_RIGHT_X, y2: y })),
+  { x1: EXPERIMENT_RIGHT_X, y1: EXPERIMENT_BUS_TOP_Y, x2: EXPERIMENT_RIGHT_X, y2: EXPERIMENT_RETURN_Y },
+  { x1: EXPERIMENT_RIGHT_X, y1: EXPERIMENT_RETURN_Y, x2: EXPERIMENT_LEFT_X, y2: EXPERIMENT_RETURN_Y },
+];
+const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
 ---
 
 <!doctype html>
@@ -27,404 +108,1617 @@ const CHALLENGE_SERIES_R = 8;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Why more paths means less resistance</title>
+    <script is:inline>
+      // Runs before first paint so a returning dark-mode visitor never sees a
+      // flash of the light theme. Kept separate from the bundled module
+      // script below, which only runs after the DOM is parsed.
+      if (localStorage.getItem("theme") === "dark") {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
   </head>
   <body>
-    <header class="site-header">
-      <nav aria-label="Primary">
-        <a href="./">Home</a>
-      </nav>
-    </header>
-    <main data-stage="predict">
-      <h1 class="title">Why more paths means less resistance</h1>
-      <p class="intro" data-testid="intro">
-        Most people expect adding a wire to a circuit to add resistance. It's the opposite: explore
-        why in five stages — predict what a second path does, experiment by switching paths on and
-        tuning them, discover the rule, then apply it to a target and a trickier series-plus-parallel
-        challenge.
+    <Header homeHref="./" reviewHref="./review/" active="home">
+      <h1 class="title">Resistors in Parallel</h1>
+      <p class="definition" data-testid="parallel-definition">
+        Two or more resistors are wired in parallel when each one connects across the very same pair
+        of points — every resistor's leads land on the same two terminals as every other resistor in
+        the group, so current gets more than one path to choose from.
       </p>
+      {/* One master volume for every hum/tone below (Check your
+          understanding, the highway analogy, the derivation) rather than a
+          slider per section — it's the same "current flowing" sound
+          language throughout, so one control covers all of it. */}
+      <div class="sound-volume" data-testid="sound-volume-control">
+        <label for="sound-volume-slider">Sound volume</label>
+        <input type="range" id="sound-volume-slider" data-testid="sound-volume-slider" min="0" max="100" value="100" />
+      </div>
+    </Header>
 
-      <p class="stage-progress" data-testid="stage-progress" aria-live="polite">
-        Stage 1 of 5 — Predict
+    <section class="parallel-check" data-testid="parallel-check" aria-labelledby="parallel-check-title">
+      <h2 class="parallel-check-title" id="parallel-check-title">Check your understanding</h2>
+      <p class="parallel-check-instructions">
+        The circuit below is open — no wire bridges the two rails yet. Drag both resistors onto the
+        rails so each one connects across the same two points, closing the circuit with the
+        resistors wired in parallel. (You can also focus a resistor with the keyboard and press
+        Enter to connect or disconnect it.)
       </p>
-      <p class="instructions" data-testid="stage-instructions" aria-live="polite">
-        Path 1 alone carries the current at 10Ω. If we also close a second 10Ω path in parallel,
-        what happens to the total resistance?
-      </p>
-      <p class="callout" data-testid="rule-statement" data-visible-in="discover" {...{ hidden: true }}>
-        1/R<sub>total</sub> = 1/R<sub>1</sub> + 1/R<sub>2</sub> + … — every closed path is another
-        route for current, so the total resistance can only go down (or stay the same) as you close
-        more of them. It never goes up.
-      </p>
+      <div class="parallel-check-board" data-testid="parallel-check-board">
+        <svg
+          class="parallel-check-circuit"
+          viewBox={`0 0 ${CHECK_VIEWBOX.width} ${CHECK_VIEWBOX.height}`}
+          role="img"
+          aria-label="An open circuit: a battery wired to a left bus and a right bus, with no resistor bridging them yet"
+        >
+          {/* Left bus: one continuous stroke from the top branch down into
+              the battery's own top lead, so both branches' left ends and the
+              battery's entry wire are visibly the same wire, not stitched
+              pieces. */}
+          <line
+            x1={CHECK_LEFT_X}
+            y1={CHECK_BUS_TOP_Y}
+            x2={CHECK_LEFT_X}
+            y2={CHECK_ENTRY_Y}
+            stroke="#333"
+            stroke-width="3"
+          />
+          {/* Right bus: same idea, continuous from the top branch down to
+              where the return wire carries current back to the battery. */}
+          <line
+            x1={CHECK_RIGHT_X}
+            y1={CHECK_BUS_TOP_Y}
+            x2={CHECK_RIGHT_X}
+            y2={CHECK_RETURN_Y}
+            stroke="#333"
+            stroke-width="3"
+          />
+          <line
+            x1={CHECK_LEFT_X}
+            y1={CHECK_RETURN_Y}
+            x2={CHECK_RIGHT_X}
+            y2={CHECK_RETURN_Y}
+            stroke="#333"
+            stroke-width="3"
+          />
+          {/* Solder-dot at each branch's junction with a bus, same convention
+              as Branch.astro, so the wire visibly terminates on the bus
+              instead of just stopping near it. */}
+          {CHECK_BRANCH_Y.map((y) => (
+            <>
+              <circle cx={CHECK_LEFT_X} cy={y} r="4" fill="#333" />
+              <circle cx={CHECK_RIGHT_X} cy={y} r="4" fill="#333" />
+            </>
+          ))}
+          <Battery x={CHECK_BATTERY.x} y={CHECK_BATTERY.y} voltage={VOLTAGE} testid="parallel-check-battery" />
+          {/* Hidden until .parallel-check[data-solved="true"] (see
+              global.css) — only meaningful once both resistors are placed
+              and current actually has a closed loop to flow around. */}
+          <g class="current-flow" aria-hidden="true" data-testid="parallel-check-current-flow">
+            {CHECK_FLOW_SEGMENTS.map((segment) => (
+              <line
+                x1={segment.x1}
+                y1={segment.y1}
+                x2={segment.x2}
+                y2={segment.y2}
+                class="current-flow-line"
+              />
+            ))}
+          </g>
+        </svg>
+        {/* The visible wiring above is 100% SVG strokes now, for a seamless
+            line with no join between differently-rendered pieces; these
+            divs exist only as the rail-left/rail-right test hooks. */}
+        <div
+          class="parallel-check-rail"
+          data-testid="parallel-check-rail-left"
+          style={`left: ${pct(CHECK_LEFT_X, CHECK_VIEWBOX.width)}; top: ${pct(CHECK_BUS_TOP_Y, CHECK_VIEWBOX.height)}; height: ${pct(CHECK_ENTRY_Y - CHECK_BUS_TOP_Y, CHECK_VIEWBOX.height)};`}
+        >
+        </div>
+        <div
+          class="parallel-check-rail"
+          data-testid="parallel-check-rail-right"
+          style={`left: ${pct(CHECK_RIGHT_X, CHECK_VIEWBOX.width)}; top: ${pct(CHECK_BUS_TOP_Y, CHECK_VIEWBOX.height)}; height: ${pct(CHECK_RETURN_Y - CHECK_BUS_TOP_Y, CHECK_VIEWBOX.height)};`}
+        >
+        </div>
+        {
+          CHECK_BRANCH_Y.map((y, i) => (
+            <div
+              class="parallel-check-slot"
+              data-testid={`parallel-check-slot-${i + 1}`}
+              style={`left: ${pct(CHECK_LEFT_X, CHECK_VIEWBOX.width)}; top: ${pct(y, CHECK_VIEWBOX.height)}; width: ${CHECK_SLOT_WIDTH_PCT};`}
+            />
+          ))
+        }
+        <div
+          class="parallel-check-tile"
+          data-testid="parallel-check-resistor-1"
+          style={`left: ${CHECK_SLOT_CENTER_X_PCT}; top: ${pct(370, CHECK_VIEWBOX.height)}; width: ${CHECK_SLOT_WIDTH_PCT};`}
+          tabindex="0"
+          role="button"
+          aria-pressed="false"
+          aria-label="Resistor R1"
+        >
+          <span class="parallel-check-tile-label" aria-hidden="true">R1</span>
+          <img src={resistorIcon} alt="" />
+        </div>
+        <div
+          class="parallel-check-tile"
+          data-testid="parallel-check-resistor-2"
+          style={`left: ${CHECK_SLOT_CENTER_X_PCT}; top: ${pct(400, CHECK_VIEWBOX.height)}; width: ${CHECK_SLOT_WIDTH_PCT};`}
+          tabindex="0"
+          role="button"
+          aria-pressed="false"
+          aria-label="Resistor R2"
+        >
+          <span class="parallel-check-tile-label" aria-hidden="true">R2</span>
+          <img src={resistorIcon} alt="" />
+        </div>
+      </div>
+      <div class="parallel-check-footer">
+        <p class="parallel-check-feedback" data-testid="parallel-check-feedback" aria-live="polite">
+          Drag both resistors onto the rails to close the circuit.
+        </p>
+        <button
+          type="button"
+          class="parallel-check-sound-toggle"
+          data-testid="parallel-check-sound-toggle"
+          aria-pressed="true"
+        >
+          Sound: on
+        </button>
+      </div>
+    </section>
 
-      <svg
-        class="circuit-scene"
-        data-testid="circuit-scene"
-        viewBox="0 0 800 500"
-        role="img"
-        aria-label="A battery driving current through three switchable parallel resistor paths into a bulb"
+    <section
+      class="parallel-check resistance-quiz"
+      data-testid="resistance-quiz"
+      aria-labelledby="resistance-quiz-title"
+    >
+      <h2 class="parallel-check-title" id="resistance-quiz-title">What happens to total resistance?</h2>
+      <p class="parallel-check-instructions">
+        R1 and R2 are both {DEFAULT_RESISTANCE}Ω, wired in parallel across the same two rails — the
+        same circuit you just connected above. Compared to a single {DEFAULT_RESISTANCE}Ω resistor on
+        its own, what happens to the total resistance? Take a guess: does it go up or down?
+      </p>
+      <div class="parallel-check-board resistance-quiz-board" data-testid="resistance-quiz-board">
+        <svg
+          class="parallel-check-circuit"
+          data-testid="resistance-quiz-circuit"
+          viewBox={`0 0 ${CHECK_VIEWBOX.width} ${CHECK_VIEWBOX.height}`}
+          role="img"
+          aria-label="A closed circuit: a battery wired to a left bus and a right bus, with two 10 ohm resistors bridging them in parallel"
+        >
+          <line
+            x1={CHECK_LEFT_X}
+            y1={CHECK_BUS_TOP_Y}
+            x2={CHECK_LEFT_X}
+            y2={CHECK_ENTRY_Y}
+            stroke="#333"
+            stroke-width="3"
+          />
+          <line
+            x1={CHECK_RIGHT_X}
+            y1={CHECK_BUS_TOP_Y}
+            x2={CHECK_RIGHT_X}
+            y2={CHECK_RETURN_Y}
+            stroke="#333"
+            stroke-width="3"
+          />
+          <line
+            x1={CHECK_LEFT_X}
+            y1={CHECK_RETURN_Y}
+            x2={CHECK_RIGHT_X}
+            y2={CHECK_RETURN_Y}
+            stroke="#333"
+            stroke-width="3"
+          />
+          {CHECK_BRANCH_Y.map((y) => (
+            <>
+              <circle cx={CHECK_LEFT_X} cy={y} r="4" fill="#333" />
+              <circle cx={CHECK_RIGHT_X} cy={y} r="4" fill="#333" />
+            </>
+          ))}
+          <Battery x={CHECK_BATTERY.x} y={CHECK_BATTERY.y} voltage={VOLTAGE} testid="resistance-quiz-battery" />
+          {CHECK_BRANCH_Y.map((y, i) => (
+            <g data-testid={`resistance-quiz-resistor-${i + 1}`}>
+              <line x1={CHECK_LEFT_X} y1={y} x2={CHECK_LEFT_X + 60} y2={y} stroke="#333" stroke-width="3" />
+              <rect
+                x={CHECK_LEFT_X + 60}
+                y={y - 14}
+                width={CHECK_RIGHT_X - 60 - (CHECK_LEFT_X + 60)}
+                height="28"
+                rx="4"
+                fill="#fff3cd"
+                stroke="#e63946"
+                stroke-width="2"
+              />
+              <text
+                x={(CHECK_LEFT_X + CHECK_RIGHT_X) / 2}
+                y={y + 5}
+                text-anchor="middle"
+                font-size="13"
+                font-weight="600">R{i + 1}: {DEFAULT_RESISTANCE}Ω</text
+              >
+              <line x1={CHECK_RIGHT_X - 60} y1={y} x2={CHECK_RIGHT_X} y2={y} stroke="#333" stroke-width="3" />
+            </g>
+          ))}
+        </svg>
+      </div>
+      <p class="predict-guess resistance-quiz-guess">
+        <button type="button" data-testid="resistance-quiz-guess-increase">Increases</button>
+        <button type="button" data-testid="resistance-quiz-guess-decrease">Decreases</button>
+      </p>
+      <div
+        class="callout resistance-quiz-feedback"
+        data-testid="resistance-quiz-feedback"
+        aria-live="polite"
+        {...{ hidden: true }}
       >
-        <line x1={BATTERY_POS.x} y1={180} x2={LEFT_BUS_X} y2={180} stroke="#333" stroke-width="3" />
-        <line
-          x1={LEFT_BUS_X}
-          y1={BRANCH_Y[0]}
-          x2={LEFT_BUS_X}
-          y2={BRANCH_Y[2]}
-          stroke="#333"
-          stroke-width="3"
-        />
-        <line
-          x1={RIGHT_BUS_X}
-          y1={BRANCH_Y[0]}
-          x2={RIGHT_BUS_X}
-          y2={BRANCH_Y[2]}
-          stroke="#333"
-          stroke-width="3"
-        />
-        <line
-          x1={RIGHT_BUS_X}
-          y1={BRANCH_Y[1]}
-          x2={BULB.x - 26}
-          y2={BRANCH_Y[1]}
-          stroke="#333"
-          stroke-width="3"
-        />
-        <line x1={BULB.x} y1={BULB.y + 40} x2={BULB.x} y2="430" stroke="#333" stroke-width="3" />
-        <line x1={BULB.x} y1="430" x2={BATTERY_POS.x} y2="430" stroke="#333" stroke-width="3" />
-        <line
-          x1={BATTERY_POS.x}
-          y1="430"
-          x2={BATTERY_POS.x}
-          y2={BATTERY_POS.y + 45}
-          stroke="#333"
-          stroke-width="3"
-        />
-
-        <g data-testid="challenge-series-resistor" data-visible-in="multi" {...{ hidden: true }}>
-          <rect x={LEFT_BUS_X - 55} y={165} width="40" height="20" rx="3" fill="#fff3cd" stroke="#e63946" stroke-width="2" />
-          <text x={LEFT_BUS_X - 35} y={160} text-anchor="middle" font-size="12">{CHALLENGE_SERIES_R}Ω</text>
-        </g>
-
-        <Branch testid="branch-1" x1={LEFT_BUS_X} x2={RIGHT_BUS_X} y={BRANCH_Y[0]} resistanceOhms={DEFAULT_RESISTANCE} />
-        <Branch testid="branch-2" x1={LEFT_BUS_X} x2={RIGHT_BUS_X} y={BRANCH_Y[1]} resistanceOhms={DEFAULT_RESISTANCE} />
-        <Branch testid="branch-3" x1={LEFT_BUS_X} x2={RIGHT_BUS_X} y={BRANCH_Y[2]} resistanceOhms={DEFAULT_RESISTANCE} />
-
-        <Battery x={BATTERY_POS.x} y={BATTERY_POS.y} voltage={VOLTAGE} />
-        <Bulb x={BULB.x} y={BULB.y} />
-      </svg>
-
-      <p class="readout" aria-live="polite">
-        <span>Total resistance: <strong data-testid="total-resistance-readout">–</strong>Ω</span>
-        <span>Current: <strong data-testid="current-readout">–</strong>A</span>
-      </p>
-
-      <div class="controls">
-        <div class="control">
-          <button type="button" data-testid="toggle-branch-1" aria-pressed="true">Path 1: ON</button>
-          <label>
-            {DEFAULT_RESISTANCE}Ω
-            <input type="range" data-testid="resistance-slider-1" min="5" max="50" value={DEFAULT_RESISTANCE} />
-          </label>
-        </div>
-        <div class="control">
-          <button type="button" data-testid="toggle-branch-2" aria-pressed="false">Path 2: OFF</button>
-          <label>
-            {DEFAULT_RESISTANCE}Ω
-            <input type="range" data-testid="resistance-slider-2" min="5" max="50" value={DEFAULT_RESISTANCE} disabled />
-          </label>
-        </div>
-        <div class="control">
-          <button type="button" data-testid="toggle-branch-3" aria-pressed="false">Path 3: OFF</button>
-          <label>
-            {DEFAULT_RESISTANCE}Ω
-            <input type="range" data-testid="resistance-slider-3" min="5" max="50" value={DEFAULT_RESISTANCE} disabled />
-          </label>
-        </div>
-      </div>
-
-      <div class="predict-panel" data-visible-in="predict" data-testid="predict-controls">
-        <p class="predict-guess">
-          <button type="button" data-testid="predict-guess-up">Goes up</button>
-          <button type="button" data-testid="predict-guess-down">Goes down</button>
-          <button type="button" data-testid="predict-guess-same">Stays the same</button>
+        <p>
+          <strong data-testid="resistance-quiz-feedback-verdict"></strong>
         </p>
-        <p class="feedback" data-testid="predict-feedback" aria-live="polite"></p>
-      </div>
-
-      <div class="panel" data-visible-in="apply" data-testid="puzzle" {...{ hidden: true }}>
-        <p data-testid="puzzle-target">Target: get the total resistance to 4Ω or less.</p>
-        <p class="status" data-testid="puzzle-status" data-solved="false" aria-live="polite">Not solved yet.</p>
-      </div>
-
-      <div class="panel" data-visible-in="multi" data-testid="challenge" {...{ hidden: true }}>
-        <p data-testid="challenge-target">
-          A fixed {CHALLENGE_SERIES_R}Ω resistor now sits in series before your parallel paths.
-          Target: get the current between 0.55A and 0.65A.
+        <p>
+          1/R<sub>total</sub> = 1/R1 + 1/R2 = 1/{DEFAULT_RESISTANCE} + 1/{DEFAULT_RESISTANCE} = 1/5, so
+          R<sub>total</sub> = 5Ω — half of a single {DEFAULT_RESISTANCE}Ω resistor alone. Wiring a second
+          resistor in parallel gives current a second path to flow through, and more available paths
+          only ever make it easier for current to flow, so the combined resistance drops.
         </p>
-        <p class="status" data-testid="challenge-status" data-solved="false" aria-live="polite">Not solved yet.</p>
       </div>
+    </section>
 
-      <p class="stage-nav">
-        <button type="button" data-testid="prev-stage" disabled>← Previous</button>
-        <button type="button" data-testid="next-stage" disabled>Next stage →</button>
+    <section
+      class="parallel-check highway-analogy"
+      data-testid="highway-analogy"
+      aria-labelledby="highway-analogy-title"
+      {...{ hidden: true }}
+    >
+      <h2 class="parallel-check-title" id="highway-analogy-title">Why the total drops: a highway analogy</h2>
+      <p class="parallel-check-instructions">
+        Picture a speed bump as a resistor and a car as current. On the series road below, one car has
+        to clear both {DEFAULT_RESISTANCE}Ω bumps back to back. On the parallel road, two cars each only
+        have to clear one — the same {DEFAULT_RESISTANCE}Ω bump, but with a whole lane to themselves.
+        Press Drive and watch which finishes first.
       </p>
-    </main>
+      <div class="highway-boards">
+        <div class="highway-board" data-testid="highway-series-board">
+          <p class="highway-board-label">Series — one lane, two bumps</p>
+          <div class="highway-board-scene">
+            <svg
+              class="highway-road"
+              viewBox={`0 0 ${HIGHWAY_VIEWBOX.width} ${HIGHWAY_VIEWBOX.height}`}
+              role="img"
+              aria-label="A single lane with two speed bumps in a row"
+            >
+              <rect width={HIGHWAY_VIEWBOX.width} height={HIGHWAY_VIEWBOX.height} class="highway-shoulder" />
+              <rect
+                y={HIGHWAY_SERIES_Y - 30}
+                width={HIGHWAY_VIEWBOX.width}
+                height="60"
+                class="highway-road-surface"
+              />
+              <line
+                x1="0"
+                y1={HIGHWAY_SERIES_Y}
+                x2={HIGHWAY_VIEWBOX.width}
+                y2={HIGHWAY_SERIES_Y}
+                class="highway-lane-marking"
+              />
+              <line
+                x1={HIGHWAY_START_X}
+                y1={HIGHWAY_SERIES_Y - 30}
+                x2={HIGHWAY_START_X}
+                y2={HIGHWAY_SERIES_Y + 30}
+                class="highway-start-line"
+              />
+              <line
+                x1={HIGHWAY_FINISH_X}
+                y1={HIGHWAY_SERIES_Y - 30}
+                x2={HIGHWAY_FINISH_X}
+                y2={HIGHWAY_SERIES_Y + 30}
+                class="highway-finish-line"
+              />
+              <text x={HIGHWAY_START_X} y="18" text-anchor="middle" font-size="10" font-weight="600"
+                >Start</text
+              >
+              <text x={HIGHWAY_FINISH_X} y="18" text-anchor="middle" font-size="10" font-weight="600"
+                >Finish</text
+              >
+              {HIGHWAY_SERIES_BUMPS.map((x, i) => (
+                <HighwayBump
+                  x={x}
+                  y={HIGHWAY_SERIES_Y}
+                  resistanceOhms={DEFAULT_RESISTANCE}
+                  testid={`highway-series-bump-${i + 1}`}
+                />
+              ))}
+            </svg>
+            <HighwayCar
+              testid="highway-series-car"
+              leftPct={pct(HIGHWAY_START_X, HIGHWAY_VIEWBOX.width)}
+              topPct={pct(HIGHWAY_SERIES_Y, HIGHWAY_VIEWBOX.height)}
+            />
+          </div>
+        </div>
+        <div class="highway-board" data-testid="highway-parallel-board">
+          <p class="highway-board-label">Parallel — two lanes, one bump each</p>
+          <div class="highway-board-scene">
+            <svg
+              class="highway-road"
+              viewBox={`0 0 ${HIGHWAY_VIEWBOX.width} ${HIGHWAY_VIEWBOX.height}`}
+              role="img"
+              aria-label="Two lanes side by side, each with one speed bump"
+            >
+              <rect width={HIGHWAY_VIEWBOX.width} height={HIGHWAY_VIEWBOX.height} class="highway-shoulder" />
+              {HIGHWAY_PARALLEL_LANE_Y.map((y) => (
+                <rect y={y - 25} width={HIGHWAY_VIEWBOX.width} height="50" class="highway-road-surface" />
+              ))}
+              <line
+                x1="0"
+                y1={(HIGHWAY_PARALLEL_LANE_Y[0] + HIGHWAY_PARALLEL_LANE_Y[1]) / 2}
+                x2={HIGHWAY_VIEWBOX.width}
+                y2={(HIGHWAY_PARALLEL_LANE_Y[0] + HIGHWAY_PARALLEL_LANE_Y[1]) / 2}
+                class="highway-lane-marking"
+              />
+              <text x={HIGHWAY_START_X} y="14" text-anchor="middle" font-size="10" font-weight="600"
+                >Start</text
+              >
+              <text x={HIGHWAY_FINISH_X} y="14" text-anchor="middle" font-size="10" font-weight="600"
+                >Finish</text
+              >
+              {HIGHWAY_PARALLEL_LANE_Y.map((y, i) => (
+                <>
+                  <line
+                    x1={HIGHWAY_START_X}
+                    y1={y - 25}
+                    x2={HIGHWAY_START_X}
+                    y2={y + 25}
+                    class="highway-start-line"
+                  />
+                  <line
+                    x1={HIGHWAY_FINISH_X}
+                    y1={y - 25}
+                    x2={HIGHWAY_FINISH_X}
+                    y2={y + 25}
+                    class="highway-finish-line"
+                  />
+                  <HighwayBump
+                    x={HIGHWAY_PARALLEL_BUMP_X}
+                    y={y}
+                    resistanceOhms={DEFAULT_RESISTANCE}
+                    testid={`highway-parallel-bump-${i + 1}`}
+                  />
+                </>
+              ))}
+            </svg>
+            {HIGHWAY_PARALLEL_LANE_Y.map((y, i) => (
+              <HighwayCar
+                testid={`highway-parallel-car-${i + 1}`}
+                leftPct={pct(HIGHWAY_START_X, HIGHWAY_VIEWBOX.width)}
+                topPct={pct(y, HIGHWAY_VIEWBOX.height)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div class="highway-controls">
+        <button type="button" data-testid="highway-drive" class="highway-drive">Drive</button>
+        <button
+          type="button"
+          class="parallel-check-sound-toggle"
+          data-testid="highway-sound-toggle"
+          aria-pressed="true"
+        >
+          Sound: on
+        </button>
+      </div>
+      <div
+        class="callout highway-comparison"
+        data-testid="highway-comparison"
+        aria-live="polite"
+        {...{ hidden: true }}
+      >
+        <p data-testid="highway-comparison-text"></p>
+      </div>
+    </section>
+
+    <section
+      class="parallel-check derivation"
+      data-testid="derivation"
+      aria-labelledby="derivation-title"
+      {...{ hidden: true }}
+    >
+      <h2 class="parallel-check-title" id="derivation-title">Deriving the formula from Ohm's law</h2>
+      <p class="parallel-check-instructions">
+        This is the same parallel pair from "Check your understanding," now solved algebraically. Total
+        current I leaves the battery, splits into I<sub>1</sub> and I<sub>2</sub> across the two
+        resistors, then recombines into I again before returning — trace the derivation alongside it to
+        see why that split forces the combined resistance down.
+      </p>
+      <div class="split-columns">
+        <div class="split-diagram">
+          <div class="parallel-check-board derivation-board" data-testid="derivation-board">
+            <svg
+              class="parallel-check-circuit"
+              viewBox={`0 0 ${CHECK_VIEWBOX.width} ${CHECK_VIEWBOX.height}`}
+              role="img"
+              aria-label="A closed parallel circuit: total current I splits into I1 and I2 across two resistors, then recombines into I"
+            >
+              <defs>
+                <marker
+                  id="derivation-arrow"
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M0,0 L10,5 L0,10 Z" fill="#f59e0b" />
+                </marker>
+              </defs>
+              <line
+                x1={CHECK_LEFT_X}
+                y1={CHECK_BUS_TOP_Y}
+                x2={CHECK_LEFT_X}
+                y2={CHECK_ENTRY_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              <line
+                x1={CHECK_RIGHT_X}
+                y1={CHECK_BUS_TOP_Y}
+                x2={CHECK_RIGHT_X}
+                y2={CHECK_RETURN_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              <line
+                x1={CHECK_LEFT_X}
+                y1={CHECK_RETURN_Y}
+                x2={CHECK_RIGHT_X}
+                y2={CHECK_RETURN_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              {CHECK_BRANCH_Y.map((y) => (
+                <>
+                  <circle cx={CHECK_LEFT_X} cy={y} r="4" fill="#333" />
+                  <circle cx={CHECK_RIGHT_X} cy={y} r="4" fill="#333" />
+                </>
+              ))}
+              <Battery x={CHECK_BATTERY.x} y={CHECK_BATTERY.y} voltage={VOLTAGE} testid="derivation-battery" />
+              {CHECK_BRANCH_Y.map((y, i) => (
+                <g data-testid={`derivation-resistor-${i + 1}`}>
+                  <line x1={CHECK_LEFT_X} y1={y} x2={CHECK_LEFT_X + 60} y2={y} stroke="#333" stroke-width="3" />
+                  <rect
+                    x={CHECK_LEFT_X + 60}
+                    y={y - 14}
+                    width={CHECK_RIGHT_X - 60 - (CHECK_LEFT_X + 60)}
+                    height="28"
+                    rx="4"
+                    fill="#fff3cd"
+                    stroke="#e63946"
+                    stroke-width="2"
+                  />
+                  <text
+                    x={(CHECK_LEFT_X + CHECK_RIGHT_X) / 2}
+                    y={y + 5}
+                    text-anchor="middle"
+                    font-size="13"
+                    font-weight="600">R{i + 1}</text
+                  >
+                  <line x1={CHECK_RIGHT_X - 60} y1={y} x2={CHECK_RIGHT_X} y2={y} stroke="#333" stroke-width="3" />
+                </g>
+              ))}
+              {/* Always-flowing (not gated behind a drag-to-solve state, since
+                  this circuit is already closed) dashed current loop, tracing
+                  the same path as the "Check your understanding" board. */}
+              <g aria-hidden="true" data-testid="derivation-current-flow">
+                {CHECK_FLOW_SEGMENTS.map((segment) => (
+                  <line
+                    x1={segment.x1}
+                    y1={segment.y1}
+                    x2={segment.x2}
+                    y2={segment.y2}
+                    class="current-flow-line derivation-flow-line"
+                  />
+                ))}
+              </g>
+              {/* Direction arrows + labels: I splitting into I1/I2 and
+                  recombining back into I. Static (unaffected by
+                  prefers-reduced-motion) so direction reads even with the
+                  flow animation switched off. */}
+              <g data-testid="derivation-current-i-in" aria-hidden="true">
+                <line
+                  x1={CHECK_LEFT_X}
+                  y1={155}
+                  x2={CHECK_LEFT_X}
+                  y2={125}
+                  stroke="#f59e0b"
+                  stroke-width="3"
+                  marker-end="url(#derivation-arrow)"
+                />
+                <text x={CHECK_LEFT_X - 12} y="144" text-anchor="end" font-size="14" font-weight="700" fill="#b45309"
+                  >I</text
+                >
+              </g>
+              {/* Placed on the lead wire *after* each resistor (between the
+                  resistor body at x<=320 and the right bus at x=380), not
+                  across the resistor itself — otherwise the arrow and its
+                  I1/I2 label sit on top of the resistor rectangle and the
+                  R1/R2 label inside it. */}
+              <g data-testid="derivation-current-i1" aria-hidden="true">
+                <line
+                  x1="332"
+                  y1={CHECK_BRANCH_Y[0]}
+                  x2="364"
+                  y2={CHECK_BRANCH_Y[0]}
+                  stroke="#f59e0b"
+                  stroke-width="3"
+                  marker-end="url(#derivation-arrow)"
+                />
+                <text
+                  x="348"
+                  y={CHECK_BRANCH_Y[0] - 12}
+                  text-anchor="middle"
+                  font-size="14"
+                  font-weight="700"
+                  fill="#b45309"
+                  >I<tspan baseline-shift="sub" font-size="10">1</tspan></text
+                >
+              </g>
+              <g data-testid="derivation-current-i2" aria-hidden="true">
+                <line
+                  x1="332"
+                  y1={CHECK_BRANCH_Y[1]}
+                  x2="364"
+                  y2={CHECK_BRANCH_Y[1]}
+                  stroke="#f59e0b"
+                  stroke-width="3"
+                  marker-end="url(#derivation-arrow)"
+                />
+                <text
+                  x="348"
+                  y={CHECK_BRANCH_Y[1] - 12}
+                  text-anchor="middle"
+                  font-size="14"
+                  font-weight="700"
+                  fill="#b45309"
+                  >I<tspan baseline-shift="sub" font-size="10">2</tspan></text
+                >
+              </g>
+              <g data-testid="derivation-current-i-out" aria-hidden="true">
+                <line
+                  x1={CHECK_RIGHT_X}
+                  y1="195"
+                  x2={CHECK_RIGHT_X}
+                  y2="225"
+                  stroke="#f59e0b"
+                  stroke-width="3"
+                  marker-end="url(#derivation-arrow)"
+                />
+                <text x={CHECK_RIGHT_X + 12} y="214" text-anchor="start" font-size="14" font-weight="700" fill="#b45309"
+                  >I</text
+                >
+              </g>
+            </svg>
+          </div>
+        </div>
+        <div class="derivation-steps" data-testid="derivation-steps">
+          <ol>
+            <li>
+              Both resistors sit across the same two points, so they share one voltage: V = I·R<sub
+                >total</sub
+              > = I<sub>1</sub>·R1 = I<sub>2</sub>·R2.
+            </li>
+            <li>Ohm's law gives the current through each branch: I<sub>1</sub> = V/R1, I<sub>2</sub> = V/R2.</li>
+            <li>
+              Kirchhoff's current law: the current splits and recombines, so I = I<sub>1</sub> + I<sub
+                >2</sub
+              >.
+            </li>
+            <li>Substituting Ohm's law into that sum: V/R<sub>total</sub> = V/R1 + V/R2.</li>
+            <li>Dividing both sides by V: <strong>1/R<sub>total</sub> = 1/R1 + 1/R2</strong>.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="derivation-controls">
+        <button
+          type="button"
+          class="parallel-check-sound-toggle"
+          data-testid="derivation-sound-toggle"
+          aria-pressed="true"
+        >
+          Sound: on
+        </button>
+      </div>
+    </section>
+
+    <section
+      class="parallel-check experiment"
+      data-testid="experiment"
+      aria-labelledby="experiment-title"
+      {...{ hidden: true }}
+    >
+      <h2 class="parallel-check-title" id="experiment-title">Try it yourself: adjust the resistors</h2>
+      <p class="parallel-check-instructions">
+        Same parallel circuit, now yours to experiment with. Drag a slider to change a resistor's
+        value, or add/remove resistors to add or remove parallel paths, and watch the total
+        resistance respond immediately.
+      </p>
+      <div class="split-columns">
+        <div class="split-diagram">
+          <div class="parallel-check-board experiment-board" data-testid="experiment-board">
+            <svg
+              class="parallel-check-circuit"
+              data-testid="experiment-circuit"
+              viewBox={`0 0 ${EXPERIMENT_VIEWBOX.width} ${EXPERIMENT_VIEWBOX.height}`}
+              role="img"
+              aria-label="A closed parallel circuit with an adjustable number of resistors"
+            >
+              <line
+                x1={EXPERIMENT_LEFT_X}
+                y1={EXPERIMENT_BUS_TOP_Y}
+                x2={EXPERIMENT_LEFT_X}
+                y2={EXPERIMENT_ENTRY_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              <line
+                x1={EXPERIMENT_RIGHT_X}
+                y1={EXPERIMENT_BUS_TOP_Y}
+                x2={EXPERIMENT_RIGHT_X}
+                y2={EXPERIMENT_RETURN_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              <line
+                x1={EXPERIMENT_LEFT_X}
+                y1={EXPERIMENT_RETURN_Y}
+                x2={EXPERIMENT_RIGHT_X}
+                y2={EXPERIMENT_RETURN_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              <Battery
+                x={EXPERIMENT_BATTERY.x}
+                y={EXPERIMENT_BATTERY.y}
+                voltage={VOLTAGE}
+                testid="experiment-battery"
+              />
+              <g data-testid="experiment-branches">
+                {experimentBranchYs.map((y, i) => (
+                  <>
+                    <circle cx={EXPERIMENT_LEFT_X} cy={y} r="4" fill="#333" />
+                    <circle cx={EXPERIMENT_RIGHT_X} cy={y} r="4" fill="#333" />
+                    <g data-testid={`experiment-resistor-${i + 1}-branch`}>
+                      <line
+                        x1={EXPERIMENT_LEFT_X}
+                        y1={y}
+                        x2={EXPERIMENT_LEFT_X + 60}
+                        y2={y}
+                        stroke="#333"
+                        stroke-width="3"
+                      />
+                      <rect
+                        x={EXPERIMENT_LEFT_X + 60}
+                        y={y - 14}
+                        width={EXPERIMENT_RIGHT_X - 60 - (EXPERIMENT_LEFT_X + 60)}
+                        height="28"
+                        rx="4"
+                        fill="#fff3cd"
+                        stroke="#e63946"
+                        stroke-width="2"
+                      />
+                      <text
+                        data-testid={`experiment-resistor-${i + 1}-label`}
+                        x={(EXPERIMENT_LEFT_X + EXPERIMENT_RIGHT_X) / 2}
+                        y={y + 5}
+                        text-anchor="middle"
+                        font-size="13"
+                        font-weight="600">R{i + 1}: {EXPERIMENT_DEFAULT_VALUES[i]}Ω</text
+                      >
+                      <line
+                        x1={EXPERIMENT_RIGHT_X - 60}
+                        y1={y}
+                        x2={EXPERIMENT_RIGHT_X}
+                        y2={y}
+                        stroke="#333"
+                        stroke-width="3"
+                      />
+                    </g>
+                  </>
+                ))}
+              </g>
+              <g aria-hidden="true" data-testid="experiment-current-flow">
+                {experimentFlowSegments.map((segment) => (
+                  <line
+                    x1={segment.x1}
+                    y1={segment.y1}
+                    x2={segment.x2}
+                    y2={segment.y2}
+                    class="current-flow-line experiment-flow-line"
+                  />
+                ))}
+              </g>
+            </svg>
+          </div>
+        </div>
+        <div class="experiment-controls" data-testid="experiment-controls">
+          <div class="experiment-resistor-rows" data-testid="experiment-resistor-rows">
+            {EXPERIMENT_DEFAULT_VALUES.map((value, i) => (
+              <div class="experiment-resistor-row" data-testid={`experiment-resistor-${i + 1}`}>
+                <span class="experiment-resistor-row-label">R{i + 1}</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="100"
+                  step="1"
+                  value={value}
+                  data-testid={`experiment-resistor-${i + 1}-slider`}
+                  aria-label={`Resistance of R${i + 1} in ohms`}
+                />
+                <span class="experiment-resistor-row-value" data-testid={`experiment-resistor-${i + 1}-value`}
+                  >{value} Ω</span
+                >
+                <button
+                  type="button"
+                  class="experiment-resistor-row-remove"
+                  data-testid={`experiment-resistor-${i + 1}-remove`}
+                  aria-label={`Remove R${i + 1}`}
+                  disabled={EXPERIMENT_DEFAULT_VALUES.length <= EXPERIMENT_MIN_RESISTORS}
+                  >×</button
+                >
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            class="experiment-add"
+            data-testid="experiment-add-resistor"
+            disabled={EXPERIMENT_DEFAULT_VALUES.length >= EXPERIMENT_MAX_RESISTORS}
+          >
+            + Add resistor
+          </button>
+          <p class="callout experiment-total" data-testid="experiment-total" aria-live="polite">
+            Total resistance: <strong>{experimentInitialTotal.toFixed(1)}Ω</strong>
+          </p>
+        </div>
+      </div>
+    </section>
+
     <script>
-      // A normal (bundled, type="module") script, not define:vars — see
-      // src/pages/index.astro's git history for why (carried forward from
-      // the reflection prototype this replaced). Every value this needs is
-      // read back from the data-* attributes the components above already
-      // rendered, so there's one source of truth for the circuit geometry.
-      import { current, parallelResistance, seriesResistance } from "../lib/circuit";
+      import { parallelResistance, seriesResistance } from "../lib/circuit";
 
-      interface Stage {
-        id: "predict" | "experiment" | "discover" | "apply" | "multi";
-        title: string;
-        instructions: string;
-        interactive: boolean;
-      }
+      // A single master volume (0-1) shared by every hum/tone on the page —
+      // each sound system below multiplies its own base volume by this
+      // before ramping a gain node. The refresh hooks let the slider retune
+      // whichever hums are currently playing, instead of only taking effect
+      // the next time a hum happens to restart.
+      let masterVolume = 1;
+      let checkHumRefresh: (() => void) | null = null;
+      let derivationHumRefresh: (() => void) | null = null;
+      let highwayHumRefresh: (() => void) | null = null;
 
-      const STAGES: Stage[] = [
-        {
-          id: "predict",
-          title: "Predict",
-          instructions:
-            "Path 1 alone carries the current at 10Ω. If we also close a second 10Ω path in parallel, what happens to the total resistance?",
-          interactive: false,
-        },
-        {
-          id: "experiment",
-          title: "Experiment",
-          instructions:
-            "Switch paths on and off and drag their resistance sliders — watch the total resistance, current, and bulb respond live.",
-          interactive: true,
-        },
-        {
-          id: "discover",
-          title: "Discover the rule",
-          instructions: "Keep experimenting and compare against the rule stated below.",
-          interactive: true,
-        },
-        {
-          id: "apply",
-          title: "Apply it",
-          instructions: "Switch on and tune paths until the total resistance is 4Ω or less.",
-          interactive: true,
-        },
-        {
-          id: "multi",
-          title: "Series + parallel challenge",
-          instructions:
-            "A fixed resistor now sits in series before your parallel paths — tune them until the current reaches the target.",
-          interactive: true,
-        },
-      ];
+      const volumeSlider = document.querySelector<HTMLInputElement>('[data-testid="sound-volume-slider"]');
+      volumeSlider?.addEventListener("input", () => {
+        masterVolume = Number(volumeSlider.value) / 100;
+        checkHumRefresh?.();
+        derivationHumRefresh?.();
+        highwayHumRefresh?.();
+      });
 
-      const VOLTAGE = 12;
-      const CHALLENGE_SERIES_R = 8;
-      const PUZZLE_TARGET_R = 4;
-      // A band, not a "reach at least X" threshold: leftover branch state
-      // from the apply-stage puzzle (low parallel resistance) already
-      // clears any simple lower bound once the series resistor is added, so
-      // the challenge would be solved before the visitor touches anything.
-      // A narrow band forces deliberate tuning of the combined network.
-      const CHALLENGE_TARGET_CURRENT_LOW = 0.55;
-      const CHALLENGE_TARGET_CURRENT_HIGH = 0.65;
-      const BRIGHTNESS_MAX_CURRENT = 4;
-
-      const main = document.querySelector("main");
-      const totalResistanceReadout = document.querySelector('[data-testid="total-resistance-readout"]');
-      const currentReadout = document.querySelector('[data-testid="current-readout"]');
-      const bulbEl = document.querySelector<SVGGElement>('[data-testid="bulb"]');
-      const bulbGlowEl = document.querySelector<SVGCircleElement>(".bulb-glow");
-      const stageProgress = document.querySelector('[data-testid="stage-progress"]');
-      const stageInstructions = document.querySelector('[data-testid="stage-instructions"]');
-      const prevBtn = document.querySelector<HTMLButtonElement>('[data-testid="prev-stage"]');
-      const nextBtn = document.querySelector<HTMLButtonElement>('[data-testid="next-stage"]');
-      const puzzleStatus = document.querySelector<HTMLElement>('[data-testid="puzzle-status"]');
-      const challengeStatus = document.querySelector<HTMLElement>('[data-testid="challenge-status"]');
-      const predictFeedback = document.querySelector<HTMLElement>('[data-testid="predict-feedback"]');
-      const guessButtons = {
-        up: document.querySelector<HTMLButtonElement>('[data-testid="predict-guess-up"]'),
-        down: document.querySelector<HTMLButtonElement>('[data-testid="predict-guess-down"]'),
-        same: document.querySelector<HTMLButtonElement>('[data-testid="predict-guess-same"]'),
-      };
-
-      interface BranchEls {
-        group: SVGGElement | null;
-        switchClosed: SVGLineElement | null;
-        switchOpen: SVGGElement | null;
-        label: SVGTextElement | null;
-        toggleBtn: HTMLButtonElement | null;
-        slider: HTMLInputElement | null;
-      }
-
-      function branchEls(n: number): BranchEls {
-        return {
-          group: document.querySelector<SVGGElement>(`[data-testid="branch-${n}"]`),
-          switchClosed: document.querySelector<SVGLineElement>(`[data-testid="branch-${n}-switch-closed"]`),
-          switchOpen: document.querySelector<SVGGElement>(`[data-testid="branch-${n}-switch-open"]`),
-          label: document.querySelector<SVGTextElement>(`[data-testid="branch-${n}-label"]`),
-          toggleBtn: document.querySelector<HTMLButtonElement>(`[data-testid="toggle-branch-${n}"]`),
-          slider: document.querySelector<HTMLInputElement>(`[data-testid="resistance-slider-${n}"]`),
-        };
-      }
-
-      const challengeResistorEl = document.querySelector<SVGGElement>(
-        '[data-testid="challenge-series-resistor"]',
+      // A comprehension check for the "same two points" definition of
+      // parallel. Pointer Events (not the HTML5 drag-and-drop API) so this
+      // works by touch as well as mouse.
+      const checkBoard = document.querySelector<HTMLElement>('[data-testid="parallel-check-board"]');
+      const checkSection = document.querySelector<HTMLElement>('[data-testid="parallel-check"]');
+      const checkFeedback = document.querySelector<HTMLElement>('[data-testid="parallel-check-feedback"]');
+      const checkSlots = [1, 2]
+        .map((n) => document.querySelector<HTMLElement>(`[data-testid="parallel-check-slot-${n}"]`))
+        .filter((el): el is HTMLElement => el !== null);
+      const checkTiles = [1, 2]
+        .map((n) => document.querySelector<HTMLElement>(`[data-testid="parallel-check-resistor-${n}"]`))
+        .filter((el): el is HTMLElement => el !== null);
+      const checkSoundToggle = document.querySelector<HTMLButtonElement>(
+        '[data-testid="parallel-check-sound-toggle"]',
       );
 
-      if (main && totalResistanceReadout && currentReadout && bulbEl && bulbGlowEl && prevBtn && nextBtn) {
-        const branches = [1, 2, 3].map((n) => branchEls(n));
-        const state = [
-          { enabled: true, resistance: 10 },
-          { enabled: false, resistance: 10 },
-          { enabled: false, resistance: 10 },
-        ];
+      if (
+        checkBoard &&
+        checkSection &&
+        checkFeedback &&
+        checkSlots.length === 2 &&
+        checkTiles.length === 2
+      ) {
+        const SNAP_DISTANCE_PX = 40;
+        const restPosition = new Map<HTMLElement, { left: string; top: string }>();
+        const tileSlot = new Map<HTMLElement, HTMLElement>();
 
-        let stageIndex = 0;
-        let guessRevealed = false;
-        const completedStages = new Set<string>();
+        // A soft, continuous hum standing in for "current is flowing" —
+        // built with the Web Audio API instead of an audio file, so there's
+        // no asset to fetch or license. The oscillator is created once (on
+        // the first user gesture, per browser autoplay rules) and then just
+        // left running; connecting/disconnecting only ramps its gain up or
+        // down, which avoids the click a raw start/stop would produce and
+        // sidesteps that an AudioContext's start() can only ever be called
+        // once per node.
+        let soundEnabled = true;
+        let audioCtx: AudioContext | null = null;
+        let humGain: GainNode | null = null;
+        const HUM_VOLUME = 0.2;
+        const HUM_RAMP_SECONDS = 0.25;
 
-        function setHidden(el: Element | null, hidden: boolean) {
-          if (!el) return;
-          if (hidden) el.setAttribute("hidden", "");
-          else el.removeAttribute("hidden");
+        function ensureAudio() {
+          if (audioCtx) return;
+          const AudioContextCtor =
+            window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          if (!AudioContextCtor) return;
+          audioCtx = new AudioContextCtor();
+          const oscillator = audioCtx.createOscillator();
+          oscillator.type = "sawtooth";
+          oscillator.frequency.value = 180;
+          humGain = audioCtx.createGain();
+          humGain.gain.value = 0;
+          oscillator.connect(humGain).connect(audioCtx.destination);
+          oscillator.start();
         }
 
-        function clamp(value: number, min: number, max: number): number {
-          return Math.min(max, Math.max(min, value));
+        // Browsers only let an AudioContext actually produce sound once it's
+        // been resumed inside a trusted user-gesture handler — pointerdown
+        // (the start of a drag) is the clearest, earliest such gesture on
+        // this board, so the context is unlocked there rather than waiting
+        // for the circuit to first become solved.
+        function unlockAudio() {
+          ensureAudio();
+          if (audioCtx?.state === "suspended") void audioCtx.resume();
         }
 
-        function applyStageVisibility(stageId: string) {
-          document.querySelectorAll("[data-visible-in]").forEach((el) => {
-            const allowed = (el.getAttribute("data-visible-in") ?? "").split(" ");
-            setHidden(el, !allowed.includes(stageId));
-          });
+        function setHumRunning(running: boolean) {
+          if (!soundEnabled) return;
+          unlockAudio();
+          if (!audioCtx || !humGain) return;
+          const target = running ? HUM_VOLUME * masterVolume : 0;
+          humGain.gain.linearRampToValueAtTime(target, audioCtx.currentTime + HUM_RAMP_SECONDS);
         }
 
-        function updateNextButtonState() {
-          const stage = STAGES[stageIndex];
-          const complete =
-            stage.id === "predict"
-              ? guessRevealed
-              : stage.id === "experiment" || stage.id === "discover"
-                ? true
-                : completedStages.has(stage.id);
-          const isLast = stageIndex === STAGES.length - 1;
-          nextBtn!.disabled = isLast || !complete;
-          nextBtn!.textContent = isLast && complete ? "All stages complete!" : "Next stage →";
+        checkTiles.forEach((tile) => {
+          restPosition.set(tile, { left: tile.style.left, top: tile.style.top });
+          tile.style.touchAction = "none";
+        });
+
+        function center(el: HTMLElement) {
+          const rect = el.getBoundingClientRect();
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         }
 
-        function render() {
-          const stage = STAGES[stageIndex];
-          const enabledResistances = state.filter((b) => b.enabled).map((b) => b.resistance);
-          const parallelR = parallelResistance(enabledResistances);
-          const totalR = stage.id === "multi" ? seriesResistance([CHALLENGE_SERIES_R, parallelR]) : parallelR;
-          const currentVal = current(VOLTAGE, totalR);
+        // .parallel-check-tile is translate(-50%, -50%) in CSS, so its
+        // left/top are the coordinates of its own center relative to the
+        // board — no need to offset by half its width/height here.
+        function placeAt(tile: HTMLElement, targetCenter: { x: number; y: number }) {
+          const boardRect = checkBoard!.getBoundingClientRect();
+          tile.style.left = `${targetCenter.x - boardRect.left}px`;
+          tile.style.top = `${targetCenter.y - boardRect.top}px`;
+        }
 
-          totalResistanceReadout!.textContent = Number.isFinite(totalR) ? totalR.toFixed(2) : "∞";
-          currentReadout!.textContent = currentVal.toFixed(2);
+        // The hum is meant to confirm "current is flowing" while the visitor
+        // is looking at *this* board — once they've scrolled on to the quiz,
+        // highway, or derivation sections, a hum with no circuit in view just
+        // reads as background noise. Paused (not disabled — the sound
+        // toggle's own on/off preference is untouched) whenever the section
+        // isn't on screen, and resumed automatically if they scroll back up
+        // to a still-solved circuit.
+        let checkSectionVisible = true;
 
-          const brightness = clamp(currentVal / BRIGHTNESS_MAX_CURRENT, 0, 1);
-          bulbGlowEl!.setAttribute("opacity", String(brightness));
-          bulbEl!.dataset.brightness = String(brightness);
+        function refreshHum() {
+          setHumRunning(checkSection!.dataset.solved === "true" && checkSectionVisible);
+        }
+        checkHumRefresh = refreshHum;
 
-          branches.forEach((els, i) => {
-            const b = state[i];
-            els.group?.classList.toggle("off", !b.enabled);
-            setHidden(els.switchClosed, !b.enabled);
-            setHidden(els.switchOpen, b.enabled);
-            if (els.label) els.label.textContent = `${b.resistance}Ω`;
-            if (els.toggleBtn) {
-              els.toggleBtn.textContent = `Path ${i + 1}: ${b.enabled ? "ON" : "OFF"}`;
-              els.toggleBtn.setAttribute("aria-pressed", String(b.enabled));
-              els.toggleBtn.disabled = !stage.interactive;
-            }
-            if (els.slider) {
-              els.slider.disabled = !stage.interactive || !b.enabled;
-            }
-          });
+        function updateCheckFeedback() {
+          const connectedCount = tileSlot.size;
+          const solved = connectedCount === checkSlots.length;
+          checkSection!.dataset.solved = String(solved);
+          checkFeedback!.textContent =
+            connectedCount === 0
+              ? "Drag both resistors onto the rails to close the circuit."
+              : connectedCount < checkSlots.length
+                ? "One connected — place the second resistor across the same two rails."
+                : "Closed! Both resistors connect across the same two points, so they're in parallel.";
+          refreshHum();
+        }
 
-          if (challengeResistorEl) setHidden(challengeResistorEl, stage.id !== "multi");
+        new IntersectionObserver(([entry]) => {
+          checkSectionVisible = entry.isIntersecting;
+          refreshHum();
+        }).observe(checkSection);
 
-          if (stage.id === "apply") {
-            const solved = totalR <= PUZZLE_TARGET_R;
-            if (solved) completedStages.add("apply");
-            if (puzzleStatus) {
-              puzzleStatus.dataset.solved = String(solved);
-              puzzleStatus.textContent = solved
-                ? `Solved! Total resistance is ${totalR.toFixed(2)}Ω.`
-                : "Not solved yet.";
+        checkSoundToggle?.addEventListener("click", () => {
+          soundEnabled = !soundEnabled;
+          checkSoundToggle.textContent = `Sound: ${soundEnabled ? "on" : "off"}`;
+          checkSoundToggle.setAttribute("aria-pressed", String(soundEnabled));
+          if (soundEnabled) {
+            refreshHum();
+          } else if (humGain && audioCtx) {
+            humGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + HUM_RAMP_SECONDS);
+          }
+        });
+
+        function connectCheck(tile: HTMLElement, slot: HTMLElement) {
+          tileSlot.set(tile, slot);
+          tile.setAttribute("aria-pressed", "true");
+          placeAt(tile, center(slot));
+          updateCheckFeedback();
+        }
+
+        function disconnectCheck(tile: HTMLElement) {
+          tileSlot.delete(tile);
+          tile.setAttribute("aria-pressed", "false");
+          const rest = restPosition.get(tile);
+          if (rest) {
+            tile.style.left = rest.left;
+            tile.style.top = rest.top;
+          }
+          updateCheckFeedback();
+        }
+
+        function nearestEmptyCheckSlot(point: { x: number; y: number }): HTMLElement | null {
+          let best: HTMLElement | null = null;
+          let bestDistance = SNAP_DISTANCE_PX;
+          for (const slot of checkSlots) {
+            if ([...tileSlot.values()].includes(slot)) continue;
+            const slotCenter = center(slot);
+            const distance = Math.hypot(point.x - slotCenter.x, point.y - slotCenter.y);
+            if (distance < bestDistance) {
+              best = slot;
+              bestDistance = distance;
             }
           }
+          return best;
+        }
 
-          if (stage.id === "multi") {
-            const solved =
-              currentVal >= CHALLENGE_TARGET_CURRENT_LOW && currentVal <= CHALLENGE_TARGET_CURRENT_HIGH;
-            if (solved) completedStages.add("multi");
-            if (challengeStatus) {
-              challengeStatus.dataset.solved = String(solved);
-              challengeStatus.textContent = solved
-                ? `Solved! Current is ${currentVal.toFixed(2)}A.`
-                : "Not solved yet.";
+        checkTiles.forEach((tile) => {
+          let dragStart = { x: 0, y: 0 };
+          let dragging = false;
+
+          tile.addEventListener("pointerdown", (event) => {
+            if (soundEnabled) unlockAudio();
+            dragging = true;
+            tile.setPointerCapture(event.pointerId);
+            tile.classList.add("dragging");
+            dragStart = { x: event.clientX, y: event.clientY };
+            if (tileSlot.has(tile)) {
+              tileSlot.delete(tile);
+              tile.setAttribute("aria-pressed", "false");
             }
-          }
-
-          updateNextButtonState();
-        }
-
-        function goToStage(index: number) {
-          stageIndex = clamp(index, 0, STAGES.length - 1);
-          const stage = STAGES[stageIndex];
-          main!.dataset.stage = stage.id;
-          applyStageVisibility(stage.id);
-          if (stageProgress) {
-            stageProgress.textContent = `Stage ${stageIndex + 1} of ${STAGES.length} — ${stage.title}`;
-          }
-          if (stageInstructions) stageInstructions.textContent = stage.instructions;
-          prevBtn!.disabled = stageIndex === 0;
-          Object.values(guessButtons).forEach((btn) => {
-            if (btn) btn.disabled = stage.id !== "predict" || guessRevealed;
           });
-          render();
-        }
 
-        branches.forEach((els, i) => {
-          els.toggleBtn?.addEventListener("click", () => {
-            if (!STAGES[stageIndex].interactive) return;
-            state[i].enabled = !state[i].enabled;
-            render();
+          // Moved purely with a CSS transform (on top of the tile's own
+          // translate(-50%, -50%)) instead of rewriting left/top every
+          // event: transform is compositor-only, so the drag can't be
+          // stalled by layout work elsewhere on the page. left/top are only
+          // touched once, on drop, to commit the resting place.
+          tile.addEventListener("pointermove", (event) => {
+            if (!dragging) return;
+            const dx = event.clientX - dragStart.x;
+            const dy = event.clientY - dragStart.y;
+            tile.style.transform = `translate(-50%, -50%) translate(${dx}px, ${dy}px)`;
           });
-          els.slider?.addEventListener("input", (event) => {
-            state[i].resistance = Number((event.target as HTMLInputElement).value);
-            render();
+
+          tile.addEventListener("pointerup", () => {
+            if (!dragging) return;
+            dragging = false;
+            tile.classList.remove("dragging");
+            const dropCenter = center(tile);
+            tile.style.transform = "";
+            const slot = nearestEmptyCheckSlot(dropCenter);
+            if (slot) connectCheck(tile, slot);
+            else disconnectCheck(tile);
+          });
+
+          tile.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            if (tileSlot.has(tile)) {
+              disconnectCheck(tile);
+              return;
+            }
+            const emptySlot = checkSlots.find((slot) => ![...tileSlot.values()].includes(slot));
+            if (emptySlot) connectCheck(tile, emptySlot);
           });
         });
 
-        function reveal(guess: "up" | "down" | "same") {
-          if (guessRevealed) return;
-          guessRevealed = true;
-          const correct = guess === "down";
-          state[1].enabled = true; // close the second path to show the effect
-          if (predictFeedback) {
-            predictFeedback.textContent = correct
-              ? "Right — closing a second path gives current another route, so total resistance drops from 10Ω to 5Ω."
-              : "Actually it drops — from 10Ω to 5Ω. A second path gives current another route, which can only lower the total resistance.";
-          }
-          Object.values(guessButtons).forEach((btn) => {
-            if (btn) btn.disabled = true;
-          });
-          render();
+        updateCheckFeedback();
+      }
+
+      // A second comprehension check, independent of the drag-to-connect
+      // board above: asks for a prediction against the same closed
+      // two-resistor parallel circuit, then reveals a verdict line (right or
+      // wrong) followed by the same "why" explanation either way.
+      const quizIncreaseBtn = document.querySelector<HTMLButtonElement>(
+        '[data-testid="resistance-quiz-guess-increase"]',
+      );
+      const quizDecreaseBtn = document.querySelector<HTMLButtonElement>(
+        '[data-testid="resistance-quiz-guess-decrease"]',
+      );
+      const quizFeedback = document.querySelector<HTMLElement>('[data-testid="resistance-quiz-feedback"]');
+      const quizFeedbackVerdict = document.querySelector<HTMLElement>(
+        '[data-testid="resistance-quiz-feedback-verdict"]',
+      );
+      // Declared here (rather than inside the highway block below) so
+      // answerQuiz can reveal it the moment the visitor guesses — the
+      // highway analogy is the "why" that follows the quiz's "what".
+      const highwaySection = document.querySelector<HTMLElement>('[data-testid="highway-analogy"]');
+      // Same reasoning: declared up here so the highway Drive button's click
+      // handler (further down) can reveal it — the formal derivation is the
+      // "how do we know" that follows the highway analogy's intuition.
+      const derivationSection = document.querySelector<HTMLElement>('[data-testid="derivation"]');
+      // Revealed by the same Drive click, right alongside the derivation —
+      // "here's the proof" and "now go play with it" land at the same time.
+      const experimentSection = document.querySelector<HTMLElement>('[data-testid="experiment"]');
+
+      if (quizIncreaseBtn && quizDecreaseBtn && quizFeedback && quizFeedbackVerdict) {
+        function answerQuiz(guess: "increase" | "decrease") {
+          const correct = guess === "decrease";
+          quizFeedbackVerdict!.textContent = correct
+            ? "Yes, that's correct! Let's understand why:"
+            : "No — it decreases. Let's understand why:";
+          quizFeedback!.dataset.correct = String(correct);
+          quizFeedback!.removeAttribute("hidden");
+          quizIncreaseBtn!.disabled = true;
+          quizDecreaseBtn!.disabled = true;
+          highwaySection?.removeAttribute("hidden");
         }
 
-        guessButtons.up?.addEventListener("click", () => reveal("up"));
-        guessButtons.down?.addEventListener("click", () => reveal("down"));
-        guessButtons.same?.addEventListener("click", () => reveal("same"));
+        quizIncreaseBtn.addEventListener("click", () => answerQuiz("increase"));
+        quizDecreaseBtn.addEventListener("click", () => answerQuiz("decrease"));
+      }
 
-        prevBtn.addEventListener("click", () => goToStage(stageIndex - 1));
-        nextBtn.addEventListener("click", () => goToStage(stageIndex + 1));
+      // Derivation section: the same "current is flowing" hum as Check your
+      // understanding — this circuit is always closed once revealed (no
+      // drag interaction to solve), so it just needs its own sound toggle
+      // plus the same auto-pause-when-scrolled-out-of-view behaviour as the
+      // section above.
+      const derivationSoundToggle = document.querySelector<HTMLButtonElement>(
+        '[data-testid="derivation-sound-toggle"]',
+      );
 
-        goToStage(0);
+      if (derivationSection && derivationSoundToggle) {
+        let derivationSoundEnabled = true;
+        let derivationAudioCtx: AudioContext | null = null;
+        let derivationHumGain: GainNode | null = null;
+        let derivationSectionVisible = true;
+        const DERIVATION_HUM_VOLUME = 0.2;
+        const DERIVATION_HUM_RAMP_SECONDS = 0.25;
+
+        function ensureDerivationAudio() {
+          if (derivationAudioCtx) return;
+          const AudioContextCtor =
+            window.AudioContext ??
+            (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          if (!AudioContextCtor) return;
+          derivationAudioCtx = new AudioContextCtor();
+          const oscillator = derivationAudioCtx.createOscillator();
+          oscillator.type = "sawtooth";
+          oscillator.frequency.value = 180;
+          derivationHumGain = derivationAudioCtx.createGain();
+          derivationHumGain.gain.value = 0;
+          oscillator.connect(derivationHumGain).connect(derivationAudioCtx.destination);
+          oscillator.start();
+        }
+
+        // Unlocked from the highway section's Drive click (the gesture that
+        // reveals this section), same reasoning as unlockAudio/unlockHwAudio
+        // above — an AudioContext can only start producing sound once
+        // resumed inside a trusted user gesture.
+        function unlockDerivationAudio() {
+          ensureDerivationAudio();
+          if (derivationAudioCtx?.state === "suspended") void derivationAudioCtx.resume();
+        }
+
+        function refreshDerivationHum() {
+          if (!derivationSoundEnabled) return;
+          unlockDerivationAudio();
+          if (!derivationAudioCtx || !derivationHumGain) return;
+          const running = !derivationSection!.hidden && derivationSectionVisible;
+          const target = running ? DERIVATION_HUM_VOLUME * masterVolume : 0;
+          derivationHumGain.gain.linearRampToValueAtTime(
+            target,
+            derivationAudioCtx.currentTime + DERIVATION_HUM_RAMP_SECONDS,
+          );
+        }
+        derivationHumRefresh = refreshDerivationHum;
+
+        new IntersectionObserver(([entry]) => {
+          derivationSectionVisible = entry.isIntersecting;
+          refreshDerivationHum();
+        }).observe(derivationSection);
+
+        derivationSoundToggle.addEventListener("click", () => {
+          derivationSoundEnabled = !derivationSoundEnabled;
+          derivationSoundToggle.textContent = `Sound: ${derivationSoundEnabled ? "on" : "off"}`;
+          derivationSoundToggle.setAttribute("aria-pressed", String(derivationSoundEnabled));
+          if (derivationSoundEnabled) {
+            refreshDerivationHum();
+          } else if (derivationHumGain && derivationAudioCtx) {
+            derivationHumGain.gain.linearRampToValueAtTime(
+              0,
+              derivationAudioCtx.currentTime + DERIVATION_HUM_RAMP_SECONDS,
+            );
+          }
+        });
+      }
+
+      // Resistor experiment: unlike every board above, the resistor count
+      // here is adjustable, so its SVG branches and slider rows are rebuilt
+      // from a plain `values` array whenever one is added or removed — the
+      // same geometry math as EXPERIMENT_* in the frontmatter (duplicated
+      // here for the same reason as HIGHWAY_*/HW_* below: the frontmatter
+      // renders the real initial markup so it's testable as static HTML,
+      // while this script owns rebuilding it after the initial render). A
+      // slider drag alone never triggers a rebuild — it only patches that
+      // one branch's label and the total — so dragging can't lose focus or
+      // restart mid-gesture.
+      const experimentCircuit = document.querySelector<SVGSVGElement>('[data-testid="experiment-circuit"]');
+      const experimentBranchesGroup = document.querySelector<SVGGElement>('[data-testid="experiment-branches"]');
+      const experimentFlowGroup = document.querySelector<SVGGElement>(
+        '[data-testid="experiment-current-flow"]',
+      );
+      const experimentRows = document.querySelector<HTMLElement>('[data-testid="experiment-resistor-rows"]');
+      const experimentAddBtn = document.querySelector<HTMLButtonElement>(
+        '[data-testid="experiment-add-resistor"]',
+      );
+      const experimentTotal = document.querySelector<HTMLElement>('[data-testid="experiment-total"]');
+
+      if (
+        experimentCircuit &&
+        experimentBranchesGroup &&
+        experimentFlowGroup &&
+        experimentRows &&
+        experimentAddBtn &&
+        experimentTotal
+      ) {
+        const EXP_LEFT_X = 130;
+        const EXP_RIGHT_X = 380;
+        const EXP_BUS_TOP_Y = 90;
+        const EXP_BRANCH_BAND: [number, number] = [90, 220];
+        const EXP_ENTRY_Y = 250;
+        const EXP_RETURN_Y = 390;
+        const EXP_MIN_RESISTORS = 1;
+        const EXP_MAX_RESISTORS = 4;
+
+        let values = [10, 10];
+
+        function expBranchYsFor(n: number): number[] {
+          const [top, bottom] = EXP_BRANCH_BAND;
+          if (n <= 1) return [(top + bottom) / 2];
+          const step = (bottom - top) / (n - 1);
+          return Array.from({ length: n }, (_, i) => top + i * step);
+        }
+
+        function updateExperimentTotal() {
+          const total = parallelResistance(values);
+          experimentTotal!.innerHTML = `Total resistance: <strong>${total.toFixed(1)}Ω</strong>`;
+        }
+
+        function experimentBranchMarkup(y: number, i: number, value: number): string {
+          const midX = (EXP_LEFT_X + EXP_RIGHT_X) / 2;
+          return `
+            <circle cx="${EXP_LEFT_X}" cy="${y}" r="4" fill="#333" />
+            <circle cx="${EXP_RIGHT_X}" cy="${y}" r="4" fill="#333" />
+            <g data-testid="experiment-resistor-${i + 1}-branch">
+              <line x1="${EXP_LEFT_X}" y1="${y}" x2="${EXP_LEFT_X + 60}" y2="${y}" stroke="#333" stroke-width="3" />
+              <rect x="${EXP_LEFT_X + 60}" y="${y - 14}" width="${EXP_RIGHT_X - 60 - (EXP_LEFT_X + 60)}" height="28" rx="4" fill="#fff3cd" stroke="#e63946" stroke-width="2" />
+              <text data-testid="experiment-resistor-${i + 1}-label" x="${midX}" y="${y + 5}" text-anchor="middle" font-size="13" font-weight="600">R${i + 1}: ${value}Ω</text>
+              <line x1="${EXP_RIGHT_X - 60}" y1="${y}" x2="${EXP_RIGHT_X}" y2="${y}" stroke="#333" stroke-width="3" />
+            </g>
+          `;
+        }
+
+        function experimentFlowMarkup(branchYs: number[]): string {
+          const segments = [
+            { x1: EXP_LEFT_X, y1: EXP_ENTRY_Y, x2: EXP_LEFT_X, y2: EXP_BUS_TOP_Y },
+            ...branchYs.map((y) => ({ x1: EXP_LEFT_X, y1: y, x2: EXP_RIGHT_X, y2: y })),
+            { x1: EXP_RIGHT_X, y1: EXP_BUS_TOP_Y, x2: EXP_RIGHT_X, y2: EXP_RETURN_Y },
+            { x1: EXP_RIGHT_X, y1: EXP_RETURN_Y, x2: EXP_LEFT_X, y2: EXP_RETURN_Y },
+          ];
+          return segments
+            .map(
+              (segment) =>
+                `<line x1="${segment.x1}" y1="${segment.y1}" x2="${segment.x2}" y2="${segment.y2}" class="current-flow-line experiment-flow-line" />`,
+            )
+            .join("");
+        }
+
+        function experimentRowMarkup(value: number, i: number, total: number): string {
+          const removeDisabled = total <= EXP_MIN_RESISTORS ? "disabled" : "";
+          return `
+            <div class="experiment-resistor-row" data-testid="experiment-resistor-${i + 1}">
+              <span class="experiment-resistor-row-label">R${i + 1}</span>
+              <input type="range" min="1" max="100" step="1" value="${value}" data-testid="experiment-resistor-${i + 1}-slider" aria-label="Resistance of R${i + 1} in ohms" />
+              <span class="experiment-resistor-row-value" data-testid="experiment-resistor-${i + 1}-value">${value} Ω</span>
+              <button type="button" class="experiment-resistor-row-remove" data-testid="experiment-resistor-${i + 1}-remove" aria-label="Remove R${i + 1}" ${removeDisabled}>×</button>
+            </div>
+          `;
+        }
+
+        function attachExperimentRowListeners() {
+          values.forEach((_, i) => {
+            const slider = document.querySelector<HTMLInputElement>(
+              `[data-testid="experiment-resistor-${i + 1}-slider"]`,
+            );
+            const valueLabel = document.querySelector<HTMLElement>(
+              `[data-testid="experiment-resistor-${i + 1}-value"]`,
+            );
+            const branchLabel = document.querySelector<SVGTextElement>(
+              `[data-testid="experiment-resistor-${i + 1}-label"]`,
+            );
+            const removeBtn = document.querySelector<HTMLButtonElement>(
+              `[data-testid="experiment-resistor-${i + 1}-remove"]`,
+            );
+
+            slider?.addEventListener("input", () => {
+              const value = Number(slider.value);
+              values[i] = value;
+              if (valueLabel) valueLabel.textContent = `${value} Ω`;
+              if (branchLabel) branchLabel.textContent = `R${i + 1}: ${value}Ω`;
+              updateExperimentTotal();
+            });
+
+            removeBtn?.addEventListener("click", () => {
+              if (values.length <= EXP_MIN_RESISTORS) return;
+              values.splice(i, 1);
+              renderExperiment();
+            });
+          });
+        }
+
+        function renderExperiment() {
+          const branchYs = expBranchYsFor(values.length);
+          experimentBranchesGroup!.innerHTML = branchYs
+            .map((y, i) => experimentBranchMarkup(y, i, values[i]))
+            .join("");
+          experimentFlowGroup!.innerHTML = experimentFlowMarkup(branchYs);
+          experimentRows!.innerHTML = values.map((value, i) => experimentRowMarkup(value, i, values.length)).join("");
+          attachExperimentRowListeners();
+          experimentAddBtn!.disabled = values.length >= EXP_MAX_RESISTORS;
+          updateExperimentTotal();
+        }
+
+        attachExperimentRowListeners();
+
+        experimentAddBtn.addEventListener("click", () => {
+          if (values.length >= EXP_MAX_RESISTORS) return;
+          values.push(10);
+          renderExperiment();
+        });
+      }
+
+      // The highway analogy: a speed bump slows a car the way a resistor
+      // impedes current. One "Drive" button races all three cars at once —
+      // the series car against both parallel cars — so the visitor sees
+      // the parallel road finish sooner rather than just reading that it
+      // does. Car position is driven frame-by-frame (not a CSS transition)
+      // because speed needs to visibly dip near each bump.
+      const highwayDriveBtn = document.querySelector<HTMLButtonElement>('[data-testid="highway-drive"]');
+      const highwaySoundToggle = document.querySelector<HTMLButtonElement>(
+        '[data-testid="highway-sound-toggle"]',
+      );
+      const highwayComparison = document.querySelector<HTMLElement>('[data-testid="highway-comparison"]');
+      const highwayComparisonText = document.querySelector<HTMLElement>(
+        '[data-testid="highway-comparison-text"]',
+      );
+      const highwaySeriesCar = document.querySelector<HTMLElement>('[data-testid="highway-series-car"]');
+      const highwayParallelCar1 = document.querySelector<HTMLElement>('[data-testid="highway-parallel-car-1"]');
+      const highwayParallelCar2 = document.querySelector<HTMLElement>('[data-testid="highway-parallel-car-2"]');
+
+      if (
+        highwaySection &&
+        highwayDriveBtn &&
+        highwaySoundToggle &&
+        highwayComparison &&
+        highwayComparisonText &&
+        highwaySeriesCar &&
+        highwayParallelCar1 &&
+        highwayParallelCar2
+      ) {
+        const HW_VIEWBOX_WIDTH = 400;
+        const HW_VIEWBOX_HEIGHT = 160;
+        const HW_START_X = 30;
+        const HW_FINISH_X = 370;
+        const HW_SERIES_Y = 80;
+        const HW_SERIES_BUMPS = [150, 250];
+        const HW_PARALLEL_LANE_Y = [50, 130];
+        const HW_PARALLEL_BUMP_X = 200;
+        // How far (in viewBox units) a bump's slow-down reaches — wide
+        // enough, at this base speed, that the dip is unmistakably visible
+        // rather than a one-frame flicker.
+        const HW_BUMP_INFLUENCE = 45;
+        const HW_MIN_SPEED_FACTOR = 0.22;
+        // The hump's own physical width (matches HighwayBump.astro's
+        // HALF_WIDTH) — narrower than HW_BUMP_INFLUENCE, so the car only
+        // visibly rises while its wheels are actually on the hump, not for
+        // the whole (wider) zone where it's merely slowing down for it.
+        const HW_BUMP_HALF_WIDTH = 22;
+        const HW_BOUNCE_HEIGHT = 14;
+        // A bump-free run takes ~2.5s at this base speed — slow on purpose,
+        // so the slow-down at each bump reads clearly instead of the car
+        // just zipping past.
+        const HW_RUN_SECONDS_NO_BUMPS = 2.5;
+        const HW_BASE_SPEED = (HW_FINISH_X - HW_START_X) / HW_RUN_SECONDS_NO_BUMPS;
+        const HW_LOW_FREQ = 70;
+        const HW_HIGH_FREQ = 160;
+        const HW_HUM_VOLUME = 0.12;
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        function hwPct(x: number) {
+          return `${(x / HW_VIEWBOX_WIDTH) * 100}%`;
+        }
+
+        function hwPctY(y: number) {
+          return `${(y / HW_VIEWBOX_HEIGHT) * 100}%`;
+        }
+
+        // A smooth, raised-cosine dip: 1 right at the bump's centre, fading
+        // to 0 at the edge of its influence radius, so the car eases into
+        // and out of the slow-down instead of snapping.
+        function speedFactor(x: number, bumps: number[]): number {
+          let dip = 0;
+          for (const bumpX of bumps) {
+            const distance = Math.abs(x - bumpX);
+            if (distance >= HW_BUMP_INFLUENCE) continue;
+            dip = Math.max(dip, (1 + Math.cos((Math.PI * distance) / HW_BUMP_INFLUENCE)) / 2);
+          }
+          return 1 - dip * (1 - HW_MIN_SPEED_FACTOR);
+        }
+
+        // How far up (in viewBox units) the car should sit while riding over
+        // a bump's hump, given its distance from the bump's centre — same
+        // raised-cosine shape as speedFactor, but scoped to the hump's own
+        // width so the "lift" tracks the drawn bump exactly: the car is back
+        // on flat road the instant it's clear of it.
+        function bumpRise(x: number, bumps: number[]): number {
+          let rise = 0;
+          for (const bumpX of bumps) {
+            const distance = Math.abs(x - bumpX);
+            if (distance >= HW_BUMP_HALF_WIDTH) continue;
+            rise = Math.max(rise, ((1 + Math.cos((Math.PI * distance) / HW_BUMP_HALF_WIDTH)) / 2) * HW_BOUNCE_HEIGHT);
+          }
+          return rise;
+        }
+
+        interface HighwayCarState {
+          el: HTMLElement;
+          bumps: number[];
+          baseY: number;
+          x: number;
+          elapsed: number;
+          finished: boolean;
+          crossed: Set<number>;
+          oscillator: OscillatorNode | null;
+          gain: GainNode | null;
+        }
+
+        function makeCarState(el: HTMLElement, bumps: number[], baseY: number): HighwayCarState {
+          return {
+            el,
+            bumps,
+            baseY,
+            x: HW_START_X,
+            elapsed: 0,
+            finished: false,
+            crossed: new Set(),
+            oscillator: null,
+            gain: null,
+          };
+        }
+
+        const cars: HighwayCarState[] = [
+          makeCarState(highwaySeriesCar, HW_SERIES_BUMPS, HW_SERIES_Y),
+          makeCarState(highwayParallelCar1, [HW_PARALLEL_BUMP_X], HW_PARALLEL_LANE_Y[0]),
+          makeCarState(highwayParallelCar2, [HW_PARALLEL_BUMP_X], HW_PARALLEL_LANE_Y[1]),
+        ];
+        const [seriesCar, parallelCar1, parallelCar2] = cars;
+
+        // Same Web Audio idiom as the parallel-check hum above (lazy
+        // AudioContext, unlocked on a user gesture, gain ramps instead of
+        // clicky start/stop) but its own context: an engine hum per car
+        // whose pitch tracks that car's speed, plus a one-shot "thump" the
+        // instant a car crosses a bump's centre.
+        let hwAudioCtx: AudioContext | null = null;
+        let hwSoundEnabled = true;
+
+        function ensureHwAudio() {
+          if (hwAudioCtx) return;
+          const AudioContextCtor =
+            window.AudioContext ??
+            (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          if (!AudioContextCtor) return;
+          hwAudioCtx = new AudioContextCtor();
+        }
+
+        function unlockHwAudio() {
+          ensureHwAudio();
+          if (hwAudioCtx?.state === "suspended") void hwAudioCtx.resume();
+        }
+
+        function startCarHum(car: HighwayCarState) {
+          if (!hwAudioCtx || !hwSoundEnabled) return;
+          const oscillator = hwAudioCtx.createOscillator();
+          oscillator.type = "triangle";
+          oscillator.frequency.value = HW_HIGH_FREQ;
+          const gain = hwAudioCtx.createGain();
+          gain.gain.value = 0;
+          oscillator.connect(gain).connect(hwAudioCtx.destination);
+          oscillator.start();
+          gain.gain.linearRampToValueAtTime(HW_HUM_VOLUME * masterVolume, hwAudioCtx.currentTime + 0.15);
+          car.oscillator = oscillator;
+          car.gain = gain;
+        }
+
+        function stopCarHum(car: HighwayCarState) {
+          if (!hwAudioCtx || !car.oscillator || !car.gain) return;
+          const oscillator = car.oscillator;
+          const gain = car.gain;
+          gain.gain.linearRampToValueAtTime(0, hwAudioCtx.currentTime + 0.2);
+          setTimeout(() => oscillator.stop(), 300);
+          car.oscillator = null;
+          car.gain = null;
+        }
+
+        // Lets the master volume slider retune cars that are already
+        // driving, not just the next drive that starts.
+        function refreshHighwayVolume() {
+          if (!hwAudioCtx) return;
+          for (const car of cars) {
+            car.gain?.gain.setTargetAtTime(HW_HUM_VOLUME * masterVolume, hwAudioCtx.currentTime, 0.05);
+          }
+        }
+        highwayHumRefresh = refreshHighwayVolume;
+
+        function playBumpThump() {
+          if (!hwAudioCtx || !hwSoundEnabled) return;
+          const oscillator = hwAudioCtx.createOscillator();
+          oscillator.type = "sine";
+          oscillator.frequency.value = 90;
+          const gain = hwAudioCtx.createGain();
+          gain.gain.value = 0;
+          oscillator.connect(gain).connect(hwAudioCtx.destination);
+          oscillator.start();
+          const now = hwAudioCtx.currentTime;
+          gain.gain.linearRampToValueAtTime(0.4 * masterVolume, now + 0.02);
+          gain.gain.linearRampToValueAtTime(0, now + 0.18);
+          oscillator.stop(now + 0.2);
+        }
+
+        function resetCars() {
+          for (const car of cars) {
+            car.x = HW_START_X;
+            car.elapsed = 0;
+            car.finished = false;
+            car.crossed.clear();
+            car.el.style.left = hwPct(HW_START_X);
+            car.el.style.top = hwPctY(car.baseY);
+          }
+        }
+
+        // The 10Ω figure matches DEFAULT_RESISTANCE and the resistors drawn
+        // on both boards above — reusing circuit.ts here keeps this number
+        // anchored to the same math the quiz just taught, rather than a
+        // second, disconnected constant.
+        function showComparison() {
+          const seriesOhms = seriesResistance([10, 10]);
+          const parallelOhms = parallelResistance([10, 10]);
+          const parallelElapsed = Math.max(parallelCar1.elapsed, parallelCar2.elapsed);
+          highwayComparisonText!.textContent =
+            `Series: ${seriesCar.elapsed.toFixed(1)}s to clear both bumps (${seriesOhms}Ω total). ` +
+            `Parallel: ${parallelElapsed.toFixed(1)}s for both cars to get home (${parallelOhms}Ω total). ` +
+            `More paths make it easier for current to flow, so the parallel trip finishes sooner even ` +
+            `though every car covered the same distance.`;
+          highwayComparison!.removeAttribute("hidden");
+        }
+
+        let hwAnimating = false;
+
+        function driveHighway() {
+          if (hwAnimating) return;
+          hwAnimating = true;
+          highwayDriveBtn!.disabled = true;
+          highwayDriveBtn!.textContent = "Driving…";
+          resetCars();
+          if (hwSoundEnabled) {
+            unlockHwAudio();
+            for (const car of cars) startCarHum(car);
+          }
+
+          if (reduceMotion) {
+            // No animation frames — jump straight to a result derived from
+            // the same circuit math the rest of the page teaches, rather
+            // than simulating per-frame motion nobody will see move.
+            const seriesOhms = seriesResistance([10, 10]);
+            const parallelOhms = parallelResistance([10, 10]);
+            const SECONDS_PER_OHM = 0.12;
+            seriesCar.elapsed = seriesOhms * SECONDS_PER_OHM;
+            parallelCar1.elapsed = parallelOhms * SECONDS_PER_OHM;
+            parallelCar2.elapsed = parallelOhms * SECONDS_PER_OHM;
+            for (const car of cars) {
+              car.el.style.left = hwPct(HW_FINISH_X);
+              stopCarHum(car);
+            }
+            showComparison();
+            hwAnimating = false;
+            highwayDriveBtn!.disabled = false;
+            highwayDriveBtn!.textContent = "Drive again";
+            return;
+          }
+
+          let lastTime: number | null = null;
+
+          function frame(time: number) {
+            if (lastTime === null) lastTime = time;
+            const dt = (time - lastTime) / 1000;
+            lastTime = time;
+
+            for (const car of cars) {
+              if (car.finished) continue;
+              const previousX = car.x;
+              const factor = speedFactor(car.x, car.bumps);
+              car.x = Math.min(HW_FINISH_X, car.x + HW_BASE_SPEED * factor * dt);
+              car.elapsed += dt;
+              car.el.style.left = hwPct(car.x);
+              // Lift the car up over the hump as it crosses it, instead of
+              // just gliding through at reduced speed — this is what makes
+              // it read as driving *over* the bump, not past it.
+              car.el.style.top = hwPctY(car.baseY - bumpRise(car.x, car.bumps));
+
+              for (const bumpX of car.bumps) {
+                if (!car.crossed.has(bumpX) && previousX < bumpX && car.x >= bumpX) {
+                  car.crossed.add(bumpX);
+                  playBumpThump();
+                }
+              }
+
+              if (car.gain && car.oscillator && hwAudioCtx) {
+                const targetFreq = HW_LOW_FREQ + (HW_HIGH_FREQ - HW_LOW_FREQ) * factor;
+                car.oscillator.frequency.setTargetAtTime(targetFreq, hwAudioCtx.currentTime, 0.05);
+              }
+
+              if (car.x >= HW_FINISH_X) {
+                car.finished = true;
+                stopCarHum(car);
+              }
+            }
+
+            if (cars.every((car) => car.finished)) {
+              hwAnimating = false;
+              highwayDriveBtn!.disabled = false;
+              highwayDriveBtn!.textContent = "Drive again";
+              showComparison();
+              return;
+            }
+
+            requestAnimationFrame(frame);
+          }
+
+          requestAnimationFrame(frame);
+        }
+
+        highwayDriveBtn.addEventListener("click", () => {
+          if (hwSoundEnabled) unlockHwAudio();
+          driveHighway();
+          derivationSection?.removeAttribute("hidden");
+          derivationHumRefresh?.();
+          experimentSection?.removeAttribute("hidden");
+        });
+
+        highwaySoundToggle.addEventListener("click", () => {
+          hwSoundEnabled = !hwSoundEnabled;
+          highwaySoundToggle.textContent = `Sound: ${hwSoundEnabled ? "on" : "off"}`;
+          highwaySoundToggle.setAttribute("aria-pressed", String(hwSoundEnabled));
+          if (!hwSoundEnabled) {
+            for (const car of cars) stopCarHum(car);
+          }
+        });
       }
     </script>
   </body>

@@ -1,0 +1,48 @@
+---
+// Shared across every page: the primary nav (Home/Review) and the dark-mode
+// toggle. Each page passes its own relative hrefs (this repo's nav links are
+// relative, not base-prefixed — see CLAUDE.md's note on why) plus which link
+// is "active", and supplies its own <h1>/intro text via the slot.
+interface Props {
+  homeHref: string;
+  reviewHref: string;
+  active: "home" | "review";
+}
+
+const { homeHref, reviewHref, active } = Astro.props;
+---
+
+<header class="site-header">
+  <div class="site-header-bar">
+    <nav aria-label="Primary">
+      <a href={homeHref} aria-current={active === "home" ? "page" : undefined}>Home</a>
+      <a href={reviewHref} aria-current={active === "review" ? "page" : undefined}>Review</a>
+    </nav>
+    <button type="button" class="theme-toggle" data-testid="theme-toggle" aria-pressed="false">
+      Dark mode
+    </button>
+  </div>
+  <slot />
+</header>
+
+<script>
+  // Independent of whatever the rest of a given page does, so it's wired up
+  // here rather than in each page's own script.
+  const themeToggle = document.querySelector<HTMLButtonElement>('[data-testid="theme-toggle"]');
+
+  function syncThemeToggleLabel(isDark: boolean) {
+    if (!themeToggle) return;
+    themeToggle.setAttribute("aria-pressed", String(isDark));
+    themeToggle.textContent = isDark ? "Light mode" : "Dark mode";
+  }
+
+  syncThemeToggleLabel(document.documentElement.dataset.theme === "dark");
+
+  themeToggle?.addEventListener("click", () => {
+    const isDark = document.documentElement.dataset.theme !== "dark";
+    if (isDark) document.documentElement.dataset.theme = "dark";
+    else delete document.documentElement.dataset.theme;
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    syncThemeToggleLabel(isDark);
+  });
+</script>

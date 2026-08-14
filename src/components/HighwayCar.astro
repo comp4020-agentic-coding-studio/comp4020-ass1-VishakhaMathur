@@ -1,0 +1,46 @@
+---
+// A small car icon, positioned by percentage over a `.highway-board-scene`
+// container (same left/top-by-percentage technique as
+// `.parallel-check-tile`) rather than living inside the road's own <svg>.
+// Nesting it in the road SVG would mean any position update the page script
+// makes moves it by *user units*, not real screen pixels, once that SVG is
+// scaled by `width: 100%` — the same trap flagged for the drag-and-drop
+// resistor tiles above, so this stays a sibling element the page script can
+// move in genuine CSS percentage space instead.
+interface Props {
+  testid: string;
+  leftPct: string;
+  topPct: string;
+}
+
+const { testid, leftPct, topPct } = Astro.props;
+---
+
+<svg
+  class="highway-car"
+  data-testid={testid}
+  viewBox="0 0 44 22"
+  aria-hidden="true"
+  style={`left: ${leftPct}; top: ${topPct};`}
+>
+  {/* Grounding shadow, chassis, cabin, tinted windows, then wheels/lights on
+      top — the same front(right)-facing car for both boards, since every
+      lane here runs left to right. Wrapped one unit up so the car's own
+      solid silhouette (roof at y=1 to wheel-bottom at y=21) sits exactly
+      centered in the 0-22 viewBox — undrawn, the wheels sit fractionally
+      lower than the roof does above center, which reads as the car
+      floating just off whatever line/lane-centre it's placed on. */}
+  <g transform="translate(0, -1)">
+    <ellipse class="highway-car-shadow" cx="22" cy="19.5" rx="17" ry="2.2" fill="#000" opacity="0.18" />
+    <rect x="4" y="9" width="36" height="8" rx="4" fill="#4f46e5" stroke="#333" stroke-width="1.5" />
+    <rect x="13" y="2" width="18" height="8" rx="3" fill="#4338ca" stroke="#333" stroke-width="1.5" />
+    <rect x="15" y="4" width="6.5" height="5" rx="1" fill="#bfdbfe" opacity="0.85" />
+    <rect x="23" y="4" width="6" height="5" rx="1" fill="#bfdbfe" opacity="0.85" />
+    <circle cx="12" cy="18" r="4" fill="#1e2230" stroke="#333" stroke-width="1" />
+    <circle cx="12" cy="18" r="1.7" fill="#9aa1b5" />
+    <circle cx="32" cy="18" r="4" fill="#1e2230" stroke="#333" stroke-width="1" />
+    <circle cx="32" cy="18" r="1.7" fill="#9aa1b5" />
+    <circle cx="41" cy="11" r="1.3" fill="#fff3b0" />
+    <circle cx="3" cy="11" r="1.3" fill="#e63946" />
+  </g>
+</svg>

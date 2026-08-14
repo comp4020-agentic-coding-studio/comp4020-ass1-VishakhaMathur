@@ -2,6 +2,7 @@
   --color-bg-start: #eef2ff;
   --color-bg-end: #f8fafc;
   --color-surface: #fff;
+  --color-surface-muted: #fbfbfd;
   --color-text: #1e2230;
   --color-text-muted: #5b6472;
   --color-border: #e2e5eb;
@@ -12,11 +13,36 @@
   --color-success-soft: #e6f6ec;
   --color-pending: #b45309;
   --color-pending-soft: #fef3e0;
+
+  /* Fixed regardless of theme: the circuit SVGs draw fixed dark strokes
+     (#333) that only read clearly against a light backing. */
+  --color-diagram-bg: #f9fafc;
+  /* Same reasoning: the road surface/shoulder are fixed real-world colors,
+     not part of the page's own light/dark palette. */
+  --color-road: #4b4f5c;
+  --color-road-shoulder: #8fbc78;
   --radius-lg: 1rem;
   --radius-md: 0.65rem;
   --radius-sm: 0.4rem;
   --shadow-md: 0 4px 16px rgb(30 34 48 / 6%), 0 1px 3px rgb(30 34 48 / 8%);
   --shadow-lg: 0 12px 32px rgb(30 34 48 / 10%), 0 2px 6px rgb(30 34 48 / 6%);
+}
+
+:root[data-theme="dark"] {
+  --color-bg-start: #12131c;
+  --color-bg-end: #05060a;
+  --color-surface: #1a1c27;
+  --color-surface-muted: #20222f;
+  --color-text: #e7e9f2;
+  --color-text-muted: #9aa1b5;
+  --color-border: #333648;
+  --color-accent: #8b8ff8;
+  --color-accent-hover: #a7abfa;
+  --color-accent-soft: #262a45;
+  --color-success: #34d399;
+  --color-success-soft: #123527;
+  --color-pending: #fbbf24;
+  --color-pending-soft: #3a2c0e;
 }
 
 * {
@@ -43,6 +69,413 @@ main {
   padding: 2.25rem 2.5rem 2.5rem;
 }
 
+/* A standalone card, deliberately not sharing main's box. */
+.parallel-check {
+  max-width: 44rem;
+  margin: 0 auto 1.75rem;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.75rem 2rem;
+}
+
+.parallel-check-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.parallel-check-instructions {
+  margin: 0 0 1.1rem;
+  color: var(--color-text-muted);
+}
+
+.parallel-check-board {
+  position: relative;
+  aspect-ratio: 460 / 430;
+  background: var(--color-diagram-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+
+.parallel-check-circuit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.parallel-check-rail {
+  /* Purely the rail-left/rail-right test hooks — the wire itself is drawn
+     entirely by .parallel-check-circuit's SVG strokes now, as one
+     continuous line with no seam against a separately-rendered div. */
+  position: absolute;
+  width: 3px;
+  transform: translateX(-50%);
+}
+
+.parallel-check-slot {
+  position: absolute;
+  height: 24px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  transform: translate(0, -50%);
+}
+
+.parallel-check-tile {
+  /* No background/border "chip" here on purpose: the resistor icon sits
+     directly on the wire, like a real component, rather than looking like a
+     draggable UI card. The drop-shadow instead of a border is what signals
+     "grabbable" without breaking that look. The tile itself still spans the
+     full rail-to-rail width (needed for drag/snap centering), but only its
+     middle portion is the resistor body — ::before/::after fill the rest
+     with plain lead-wire, so the body reads as a normal-sized component
+     instead of a symbol stretched across the whole gap. */
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 25%));
+  transition: filter 0.15s ease;
+}
+
+.parallel-check-tile::before,
+.parallel-check-tile::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 3px;
+  background: #333;
+}
+
+.parallel-check-tile img {
+  /* Kept small and centered rather than stretched across the whole tile —
+     resistor.png's own leads still run to its edges, and butt up against the
+     ::before/::after lead-wire above so the whole run still reads as one
+     continuous wire from rail to rail. */
+  display: block;
+  flex: 0 0 auto;
+  width: 40%;
+  height: 22px;
+  pointer-events: none;
+}
+
+.parallel-check-tile-label {
+  position: absolute;
+  top: -1.3em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text);
+  pointer-events: none;
+}
+
+.parallel-check-tile[aria-pressed="true"] {
+  cursor: default;
+}
+
+.parallel-check-tile.dragging {
+  cursor: grabbing;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 35%));
+  z-index: 1;
+}
+
+.current-flow-line {
+  /* Fixed color regardless of theme, same reasoning as the #333 wire
+     strokes above: this diagram always sits on the fixed light
+     --color-diagram-bg, never the page's own dark-mode background. */
+  stroke: #f59e0b;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 8 8;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.parallel-check[data-solved="true"] .current-flow-line {
+  opacity: 1;
+  animation: parallel-current-flow 0.6s linear infinite;
+}
+
+/* The derivation and experiment boards' circuits are already closed (no
+   drag interaction to solve), so their flow lines run unconditionally
+   rather than gating on [data-solved="true"]. */
+.derivation-flow-line,
+.experiment-flow-line {
+  opacity: 1;
+  animation: parallel-current-flow 0.6s linear infinite;
+}
+
+@keyframes parallel-current-flow {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .derivation-flow-line,
+  .experiment-flow-line {
+    animation: none;
+  }
+
+  .parallel-check[data-solved="true"] .current-flow-line {
+    animation: none;
+  }
+}
+
+.parallel-check-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.parallel-check-feedback {
+  margin: 0;
+  font-weight: 600;
+  min-height: 1.4em;
+}
+
+.parallel-check[data-solved="true"] .parallel-check-feedback {
+  color: var(--color-success);
+}
+
+.parallel-check-sound-toggle {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.65rem;
+  cursor: pointer;
+}
+
+.parallel-check-sound-toggle:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.resistance-quiz-board {
+  margin-bottom: 1.1rem;
+}
+
+.highway-boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.highway-board {
+  flex: 1 1 16rem;
+  min-width: 14rem;
+}
+
+.highway-board-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.highway-board-scene {
+  position: relative;
+  aspect-ratio: 400 / 160;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.highway-road {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.highway-shoulder {
+  fill: var(--color-road-shoulder);
+}
+
+.highway-road-surface {
+  fill: var(--color-road);
+}
+
+.highway-lane-marking {
+  stroke: #f9fafc;
+  stroke-width: 2.5;
+  stroke-dasharray: 10 8;
+}
+
+.highway-start-line,
+.highway-finish-line {
+  stroke: #f9fafc;
+  stroke-width: 2;
+}
+
+.highway-road-label {
+  fill: #f9fafc;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.highway-car {
+  position: absolute;
+  width: 15%;
+  aspect-ratio: 44 / 22;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.highway-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.highway-drive {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.highway-drive:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  color: #fff;
+}
+
+.highway-comparison p {
+  margin: 0;
+}
+
+/* Shared "diagram beside content" two-column layout, used by both the
+   derivation and experiment sections. */
+.split-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.split-diagram {
+  flex: 1 1 20rem;
+  min-width: 16rem;
+}
+
+.derivation-steps {
+  flex: 1 1 18rem;
+  min-width: 16rem;
+}
+
+.derivation-steps ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.derivation-steps li {
+  font-size: 0.95rem;
+}
+
+.derivation-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.experiment-controls {
+  flex: 1 1 18rem;
+  min-width: 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.experiment-resistor-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.experiment-resistor-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.experiment-resistor-row-label {
+  flex-shrink: 0;
+  width: 1.6rem;
+  font-weight: 600;
+}
+
+.experiment-resistor-row input[type="range"] {
+  flex: 1 1 auto;
+  accent-color: var(--color-accent);
+}
+
+.experiment-resistor-row-value {
+  flex-shrink: 0;
+  width: 3.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.experiment-resistor-row-remove {
+  flex-shrink: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  line-height: 1;
+  font-size: 1rem;
+}
+
+.experiment-resistor-row-remove:disabled,
+.experiment-add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.experiment-add {
+  align-self: flex-start;
+}
+
+.experiment-total {
+  margin-top: 0.25rem;
+}
+
+.experiment-total strong {
+  font-size: 1.1rem;
+}
+
+.resistance-quiz-guess {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 1.1rem;
+}
+
+.resistance-quiz-feedback[data-correct="true"] [data-testid="resistance-quiz-feedback-verdict"] {
+  color: var(--color-success);
+}
+
+.resistance-quiz-feedback[data-correct="false"] [data-testid="resistance-quiz-feedback-verdict"] {
+  color: var(--color-pending);
+}
+
 a {
   color: var(--color-accent);
 }
@@ -56,37 +489,80 @@ a:hover {
   margin: 0 auto 1.25rem;
 }
 
+.site-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.site-header nav {
+  display: flex;
+  gap: 1rem;
+}
+
 .site-header nav a {
   font-weight: 600;
   text-decoration: none;
 }
 
+.site-header nav a[aria-current="page"] {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.theme-toggle {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.8rem;
+}
+
 .title {
-  margin: 0 0 0.75rem;
+  margin: 0.75rem 0 0;
   font-size: 1.75rem;
   letter-spacing: -0.02em;
+}
+
+.definition {
+  margin: 0.4rem 0 0;
+  max-width: 38rem;
+  color: var(--color-text-muted);
+}
+
+/* Fixed to the viewport corner (not just the header) so it's reachable
+   without scrolling all the way back up — it controls hums in sections far
+   below the header, so it needs to stay reachable from anywhere on the
+   page. */
+.sound-volume {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.sound-volume label {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.sound-volume input[type="range"] {
+  width: 6rem;
+  accent-color: var(--color-accent);
 }
 
 .intro {
   color: var(--color-text-muted);
   margin-top: 0;
-}
-
-.stage-progress {
-  display: inline-block;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  background: var(--color-accent-soft);
-  padding: 0.3rem 0.75rem;
-  border-radius: 999px;
-  margin: 0.5rem 0;
-}
-
-.instructions {
-  font-size: 1.05rem;
 }
 
 .callout {
@@ -95,67 +571,6 @@ a:hover {
   border-radius: var(--radius-sm);
   padding: 0.85rem 1.1rem;
   font-size: 0.95rem;
-}
-
-.circuit-scene {
-  display: block;
-  width: 100%;
-  height: auto;
-  margin: 1.25rem 0;
-  background: #f9fafc;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-}
-
-.readout {
-  display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  align-items: baseline;
-  background: var(--color-accent-soft);
-  border-radius: var(--radius-md);
-  padding: 0.9rem 1.1rem;
-  font-size: 1rem;
-  margin: 1rem 0;
-}
-
-.readout strong {
-  font-family: SFMono-Regular, ui-monospace, Menlo, monospace;
-  font-size: 1.15rem;
-  color: var(--color-accent);
-}
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin: 1.25rem 0;
-}
-
-.control {
-  flex: 1 1 12rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 1rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: #fbfbfd;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-.control:has(button[aria-pressed="true"]) {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent-soft);
-}
-
-.control label {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
 }
 
 button {
@@ -170,16 +585,12 @@ button {
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
-button[data-testid^="toggle-branch"] {
-  align-self: flex-start;
-}
-
 .predict-guess button {
   flex: 1 1 8rem;
 }
 
-.stage-nav button {
-  flex: 1;
+.resistance-quiz-guess button {
+  flex: 1 1 8rem;
 }
 
 button:disabled {
@@ -196,55 +607,6 @@ button:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-button[data-testid^="toggle-branch"][aria-pressed="true"] {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #fff;
-}
-
-button[data-testid^="toggle-branch"][aria-pressed="true"]:hover:not(:disabled) {
-  background: var(--color-accent-hover);
-  color: #fff;
-}
-
-input[type="range"] {
-  flex: 1;
-  appearance: none;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--color-border);
-  outline: none;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgb(30 34 48 / 35%);
-  cursor: pointer;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgb(30 34 48 / 35%);
-  cursor: pointer;
-}
-
-input[type="range"]:disabled {
-  opacity: 0.4;
-}
-
-.predict-panel {
-  margin: 1.25rem 0;
-}
-
 .predict-guess {
   display: flex;
   gap: 0.6rem;
@@ -257,56 +619,71 @@ input[type="range"]:disabled {
   min-height: 1.4em;
 }
 
-.panel {
-  margin: 1.25rem 0;
-  padding: 1.1rem 1.25rem;
+fieldset.rating {
+  border: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+fieldset.rating legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 0;
+  margin-bottom: 0.4rem;
+}
+
+.stars {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.star {
+  font-size: 1.75rem;
+  line-height: 1;
+  padding: 0.2rem 0.35rem;
+  border: none;
+  background: none;
+  color: var(--color-border);
+}
+
+.star:hover:not(:disabled) {
+  color: var(--color-accent-hover);
+}
+
+.star.filled {
+  color: var(--color-accent);
+}
+
+label[for="review-comment"] {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 0.4rem;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface-muted);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: #fbfbfd;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  resize: vertical;
 }
 
-.panel p {
-  margin: 0 0 0.5rem;
-}
-
-.panel p:last-child {
-  margin-bottom: 0;
-}
-
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-weight: 700;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.9rem;
-  color: var(--color-pending);
-  background: var(--color-pending-soft);
-}
-
-.status[data-solved="true"] {
-  color: var(--color-success);
-  background: var(--color-success-soft);
-}
-
-.stage-nav {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1.75rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--color-border);
-}
-
-.stage-nav button[data-testid="next-stage"] {
+.review-submit {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: #fff;
 }
 
-.stage-nav button[data-testid="next-stage"]:hover:not(:disabled) {
+.review-submit:hover:not(:disabled) {
   background: var(--color-accent-hover);
-  color: #fff;
 }
 
 @media (width <= 32rem) {
@@ -314,7 +691,14 @@ input[type="range"]:disabled {
     padding: 1.5rem;
   }
 
-  .control {
-    flex: 1 1 100%;
+  .sound-volume {
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.7rem;
+  }
+
+  .sound-volume input[type="range"] {
+    width: 4.5rem;
   }
 }
