@@ -68,36 +68,39 @@ const HIGHWAY_PARALLEL_LANE_Y = [50, 130];
 const HIGHWAY_PARALLEL_BUMP_X = 200;
 
 // The "try it yourself" experiment: unlike every board above, the resistor
-// count here is adjustable (1-4), so branch positions can't be a fixed
-// 2-element array like CHECK_BRANCH_Y. Instead they redistribute evenly
-// within a fixed band, inside a viewBox whose overall size never changes —
-// so adding/removing a resistor never reflows the rest of the page, only
-// where branches tap into the (always full-height) bus wires.
-const EXPERIMENT_VIEWBOX = { width: 460, height: 430 };
+// count here is adjustable (up to EXPERIMENT_MAX_RESISTORS), so branch
+// positions can't be a fixed 2-element array like CHECK_BRANCH_Y. Each
+// branch gets a fixed vertical spacing below the last, and the bus/battery/
+// return-line positions — and the SVG's own viewBox height — grow to fit,
+// so the board never has to squeeze extra branches into a fixed space.
+const EXPERIMENT_VIEWBOX_WIDTH = 460;
 const EXPERIMENT_LEFT_X = 130;
 const EXPERIMENT_RIGHT_X = 380;
 const EXPERIMENT_BUS_TOP_Y = 90;
-const EXPERIMENT_BRANCH_BAND: [number, number] = [90, 220];
-const EXPERIMENT_ENTRY_Y = 250;
-const EXPERIMENT_BATTERY = { x: EXPERIMENT_LEFT_X, y: 320 };
-const EXPERIMENT_RETURN_Y = 390;
+const EXPERIMENT_BRANCH_SPACING = 55;
 const EXPERIMENT_MIN_RESISTORS = 1;
-const EXPERIMENT_MAX_RESISTORS = 4;
+const EXPERIMENT_MAX_RESISTORS = 20;
 const EXPERIMENT_DEFAULT_VALUES = [10, 10];
 
 function experimentBranchYsFor(n: number): number[] {
-  const [top, bottom] = EXPERIMENT_BRANCH_BAND;
-  if (n <= 1) return [(top + bottom) / 2];
-  const step = (bottom - top) / (n - 1);
-  return Array.from({ length: n }, (_, i) => top + i * step);
+  return Array.from({ length: n }, (_, i) => EXPERIMENT_BUS_TOP_Y + i * EXPERIMENT_BRANCH_SPACING);
 }
 
-const experimentBranchYs = experimentBranchYsFor(EXPERIMENT_DEFAULT_VALUES.length);
+function experimentLayoutFor(n: number) {
+  const branchYs = experimentBranchYsFor(n);
+  const entryY = branchYs[branchYs.length - 1] + 40;
+  const batteryY = entryY + 70;
+  const returnY = batteryY + 70;
+  const viewboxHeight = returnY + 40;
+  return { branchYs, entryY, batteryY, returnY, viewboxHeight };
+}
+
+const experimentLayout = experimentLayoutFor(EXPERIMENT_DEFAULT_VALUES.length);
 const experimentFlowSegments = [
-  { x1: EXPERIMENT_LEFT_X, y1: EXPERIMENT_ENTRY_Y, x2: EXPERIMENT_LEFT_X, y2: EXPERIMENT_BUS_TOP_Y },
-  ...experimentBranchYs.map((y) => ({ x1: EXPERIMENT_LEFT_X, y1: y, x2: EXPERIMENT_RIGHT_X, y2: y })),
-  { x1: EXPERIMENT_RIGHT_X, y1: EXPERIMENT_BUS_TOP_Y, x2: EXPERIMENT_RIGHT_X, y2: EXPERIMENT_RETURN_Y },
-  { x1: EXPERIMENT_RIGHT_X, y1: EXPERIMENT_RETURN_Y, x2: EXPERIMENT_LEFT_X, y2: EXPERIMENT_RETURN_Y },
+  { x1: EXPERIMENT_LEFT_X, y1: experimentLayout.entryY, x2: EXPERIMENT_LEFT_X, y2: EXPERIMENT_BUS_TOP_Y },
+  ...experimentLayout.branchYs.map((y) => ({ x1: EXPERIMENT_LEFT_X, y1: y, x2: EXPERIMENT_RIGHT_X, y2: y })),
+  { x1: EXPERIMENT_RIGHT_X, y1: EXPERIMENT_BUS_TOP_Y, x2: EXPERIMENT_RIGHT_X, y2: experimentLayout.returnY },
+  { x1: EXPERIMENT_RIGHT_X, y1: experimentLayout.returnY, x2: EXPERIMENT_LEFT_X, y2: experimentLayout.returnY },
 ];
 const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
 ---
@@ -752,42 +755,44 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
             <svg
               class="parallel-check-circuit"
               data-testid="experiment-circuit"
-              viewBox={`0 0 ${EXPERIMENT_VIEWBOX.width} ${EXPERIMENT_VIEWBOX.height}`}
+              viewBox={`0 0 ${EXPERIMENT_VIEWBOX_WIDTH} ${experimentLayout.viewboxHeight}`}
               role="img"
               aria-label="A closed parallel circuit with an adjustable number of resistors"
             >
-              <line
-                x1={EXPERIMENT_LEFT_X}
-                y1={EXPERIMENT_BUS_TOP_Y}
-                x2={EXPERIMENT_LEFT_X}
-                y2={EXPERIMENT_ENTRY_Y}
-                stroke="#333"
-                stroke-width="3"
-              />
-              <line
-                x1={EXPERIMENT_RIGHT_X}
-                y1={EXPERIMENT_BUS_TOP_Y}
-                x2={EXPERIMENT_RIGHT_X}
-                y2={EXPERIMENT_RETURN_Y}
-                stroke="#333"
-                stroke-width="3"
-              />
-              <line
-                x1={EXPERIMENT_LEFT_X}
-                y1={EXPERIMENT_RETURN_Y}
-                x2={EXPERIMENT_RIGHT_X}
-                y2={EXPERIMENT_RETURN_Y}
-                stroke="#333"
-                stroke-width="3"
-              />
-              <Battery
-                x={EXPERIMENT_BATTERY.x}
-                y={EXPERIMENT_BATTERY.y}
-                voltage={VOLTAGE}
-                testid="experiment-battery"
-              />
+              <g data-testid="experiment-frame">
+                <line
+                  x1={EXPERIMENT_LEFT_X}
+                  y1={EXPERIMENT_BUS_TOP_Y}
+                  x2={EXPERIMENT_LEFT_X}
+                  y2={experimentLayout.entryY}
+                  stroke="#333"
+                  stroke-width="3"
+                />
+                <line
+                  x1={EXPERIMENT_RIGHT_X}
+                  y1={EXPERIMENT_BUS_TOP_Y}
+                  x2={EXPERIMENT_RIGHT_X}
+                  y2={experimentLayout.returnY}
+                  stroke="#333"
+                  stroke-width="3"
+                />
+                <line
+                  x1={EXPERIMENT_LEFT_X}
+                  y1={experimentLayout.returnY}
+                  x2={EXPERIMENT_RIGHT_X}
+                  y2={experimentLayout.returnY}
+                  stroke="#333"
+                  stroke-width="3"
+                />
+                <Battery
+                  x={EXPERIMENT_LEFT_X}
+                  y={experimentLayout.batteryY}
+                  voltage={VOLTAGE}
+                  testid="experiment-battery"
+                />
+              </g>
               <g data-testid="experiment-branches">
-                {experimentBranchYs.map((y, i) => (
+                {experimentLayout.branchYs.map((y, i) => (
                   <>
                     <circle cx={EXPERIMENT_LEFT_X} cy={y} r="4" fill="#333" />
                     <circle cx={EXPERIMENT_RIGHT_X} cy={y} r="4" fill="#333" />
@@ -810,10 +815,14 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
                         stroke="#e63946"
                         stroke-width="2"
                       />
+                      {/* Sits above the wire/resistor rather than centered on
+                          it, so the animated current-flow line (which runs
+                          along the wire, behind nothing) never slides
+                          underneath and through this text. */}
                       <text
                         data-testid={`experiment-resistor-${i + 1}-label`}
                         x={(EXPERIMENT_LEFT_X + EXPERIMENT_RIGHT_X) / 2}
-                        y={y + 5}
+                        y={y - 20}
                         text-anchor="middle"
                         font-size="13"
                         font-weight="600">R{i + 1}: {EXPERIMENT_DEFAULT_VALUES[i]}Ω</text
@@ -1229,10 +1238,19 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
         }
         derivationHumRefresh = refreshDerivationHum;
 
-        new IntersectionObserver(([entry]) => {
-          derivationSectionVisible = entry.isIntersecting;
-          refreshDerivationHum();
-        }).observe(derivationSection);
+        // `isIntersecting` stays true for any nonzero overlap no matter what
+        // threshold is passed, so a one-pixel sliver of this section left at
+        // the top of the viewport would otherwise keep the hum playing once
+        // the visitor has scrolled on to the experiment section below it.
+        // Checking intersectionRatio directly against a real threshold means
+        // the hum stops once this section is mostly scrolled past.
+        new IntersectionObserver(
+          ([entry]) => {
+            derivationSectionVisible = entry.intersectionRatio >= 0.4;
+            refreshDerivationHum();
+          },
+          { threshold: [0, 0.25, 0.4, 0.5, 0.75, 1] },
+        ).observe(derivationSection);
 
         derivationSoundToggle.addEventListener("click", () => {
           derivationSoundEnabled = !derivationSoundEnabled;
@@ -1260,6 +1278,7 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
       // one branch's label and the total — so dragging can't lose focus or
       // restart mid-gesture.
       const experimentCircuit = document.querySelector<SVGSVGElement>('[data-testid="experiment-circuit"]');
+      const experimentFrameGroup = document.querySelector<SVGGElement>('[data-testid="experiment-frame"]');
       const experimentBranchesGroup = document.querySelector<SVGGElement>('[data-testid="experiment-branches"]');
       const experimentFlowGroup = document.querySelector<SVGGElement>(
         '[data-testid="experiment-current-flow"]',
@@ -1272,28 +1291,35 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
 
       if (
         experimentCircuit &&
+        experimentFrameGroup &&
         experimentBranchesGroup &&
         experimentFlowGroup &&
         experimentRows &&
         experimentAddBtn &&
         experimentTotal
       ) {
+        const EXP_VIEWBOX_WIDTH = 460;
         const EXP_LEFT_X = 130;
         const EXP_RIGHT_X = 380;
         const EXP_BUS_TOP_Y = 90;
-        const EXP_BRANCH_BAND: [number, number] = [90, 220];
-        const EXP_ENTRY_Y = 250;
-        const EXP_RETURN_Y = 390;
+        const EXP_BRANCH_SPACING = 55;
         const EXP_MIN_RESISTORS = 1;
-        const EXP_MAX_RESISTORS = 4;
+        const EXP_MAX_RESISTORS = 20;
+        const EXP_VOLTAGE = 12;
 
         let values = [10, 10];
 
         function expBranchYsFor(n: number): number[] {
-          const [top, bottom] = EXP_BRANCH_BAND;
-          if (n <= 1) return [(top + bottom) / 2];
-          const step = (bottom - top) / (n - 1);
-          return Array.from({ length: n }, (_, i) => top + i * step);
+          return Array.from({ length: n }, (_, i) => EXP_BUS_TOP_Y + i * EXP_BRANCH_SPACING);
+        }
+
+        function expLayoutFor(n: number) {
+          const branchYs = expBranchYsFor(n);
+          const entryY = branchYs[branchYs.length - 1] + 40;
+          const batteryY = entryY + 70;
+          const returnY = batteryY + 70;
+          const viewboxHeight = returnY + 40;
+          return { branchYs, entryY, batteryY, returnY, viewboxHeight };
         }
 
         function updateExperimentTotal() {
@@ -1309,18 +1335,40 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
             <g data-testid="experiment-resistor-${i + 1}-branch">
               <line x1="${EXP_LEFT_X}" y1="${y}" x2="${EXP_LEFT_X + 60}" y2="${y}" stroke="#333" stroke-width="3" />
               <rect x="${EXP_LEFT_X + 60}" y="${y - 14}" width="${EXP_RIGHT_X - 60 - (EXP_LEFT_X + 60)}" height="28" rx="4" fill="#fff3cd" stroke="#e63946" stroke-width="2" />
-              <text data-testid="experiment-resistor-${i + 1}-label" x="${midX}" y="${y + 5}" text-anchor="middle" font-size="13" font-weight="600">R${i + 1}: ${value}Ω</text>
+              <text data-testid="experiment-resistor-${i + 1}-label" x="${midX}" y="${y - 20}" text-anchor="middle" font-size="13" font-weight="600">R${i + 1}: ${value}Ω</text>
               <line x1="${EXP_RIGHT_X - 60}" y1="${y}" x2="${EXP_RIGHT_X}" y2="${y}" stroke="#333" stroke-width="3" />
             </g>
           `;
         }
 
-        function experimentFlowMarkup(branchYs: number[]): string {
+        function experimentBatteryMarkup(x: number, y: number, voltage: number): string {
+          return `
+            <g data-testid="experiment-battery" data-x="${x}" data-y="${y}" data-voltage="${voltage}">
+              <line x1="${x}" y1="${y - 70}" x2="${x}" y2="${y - 45}" stroke="#333" stroke-width="3" />
+              <rect x="${x - 25}" y="${y - 45}" width="50" height="90" rx="8" fill="#eef0ff" stroke="#4f46e5" stroke-width="2" />
+              <text x="${x}" y="${y - 50}" text-anchor="middle" font-size="20" font-weight="bold" fill="#dc2626">+</text>
+              <text x="${x}" y="${y + 4}" text-anchor="middle" font-size="14" font-weight="bold">${voltage}V</text>
+              <text x="${x}" y="${y + 60}" text-anchor="middle" font-size="20" font-weight="bold" fill="#1e2230">−</text>
+              <line x1="${x}" y1="${y + 45}" x2="${x}" y2="${y + 70}" stroke="#333" stroke-width="3" />
+            </g>
+          `;
+        }
+
+        function experimentFrameMarkup(layout: ReturnType<typeof expLayoutFor>): string {
+          return `
+            <line x1="${EXP_LEFT_X}" y1="${EXP_BUS_TOP_Y}" x2="${EXP_LEFT_X}" y2="${layout.entryY}" stroke="#333" stroke-width="3" />
+            <line x1="${EXP_RIGHT_X}" y1="${EXP_BUS_TOP_Y}" x2="${EXP_RIGHT_X}" y2="${layout.returnY}" stroke="#333" stroke-width="3" />
+            <line x1="${EXP_LEFT_X}" y1="${layout.returnY}" x2="${EXP_RIGHT_X}" y2="${layout.returnY}" stroke="#333" stroke-width="3" />
+            ${experimentBatteryMarkup(EXP_LEFT_X, layout.batteryY, EXP_VOLTAGE)}
+          `;
+        }
+
+        function experimentFlowMarkup(layout: ReturnType<typeof expLayoutFor>): string {
           const segments = [
-            { x1: EXP_LEFT_X, y1: EXP_ENTRY_Y, x2: EXP_LEFT_X, y2: EXP_BUS_TOP_Y },
-            ...branchYs.map((y) => ({ x1: EXP_LEFT_X, y1: y, x2: EXP_RIGHT_X, y2: y })),
-            { x1: EXP_RIGHT_X, y1: EXP_BUS_TOP_Y, x2: EXP_RIGHT_X, y2: EXP_RETURN_Y },
-            { x1: EXP_RIGHT_X, y1: EXP_RETURN_Y, x2: EXP_LEFT_X, y2: EXP_RETURN_Y },
+            { x1: EXP_LEFT_X, y1: layout.entryY, x2: EXP_LEFT_X, y2: EXP_BUS_TOP_Y },
+            ...layout.branchYs.map((y) => ({ x1: EXP_LEFT_X, y1: y, x2: EXP_RIGHT_X, y2: y })),
+            { x1: EXP_RIGHT_X, y1: EXP_BUS_TOP_Y, x2: EXP_RIGHT_X, y2: layout.returnY },
+            { x1: EXP_RIGHT_X, y1: layout.returnY, x2: EXP_LEFT_X, y2: layout.returnY },
           ];
           return segments
             .map(
@@ -1374,11 +1422,13 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
         }
 
         function renderExperiment() {
-          const branchYs = expBranchYsFor(values.length);
-          experimentBranchesGroup!.innerHTML = branchYs
+          const layout = expLayoutFor(values.length);
+          experimentCircuit!.setAttribute("viewBox", `0 0 ${EXP_VIEWBOX_WIDTH} ${layout.viewboxHeight}`);
+          experimentFrameGroup!.innerHTML = experimentFrameMarkup(layout);
+          experimentBranchesGroup!.innerHTML = layout.branchYs
             .map((y, i) => experimentBranchMarkup(y, i, values[i]))
             .join("");
-          experimentFlowGroup!.innerHTML = experimentFlowMarkup(branchYs);
+          experimentFlowGroup!.innerHTML = experimentFlowMarkup(layout);
           experimentRows!.innerHTML = values.map((value, i) => experimentRowMarkup(value, i, values.length)).join("");
           attachExperimentRowListeners();
           experimentAddBtn!.disabled = values.length >= EXP_MAX_RESISTORS;
