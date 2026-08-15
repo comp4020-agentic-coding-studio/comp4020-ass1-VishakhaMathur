@@ -872,13 +872,15 @@ const experimentIsInitialSuccess =
               > = I<sub>1</sub>·R1 = I<sub>2</sub>·R2.
             </li>
             <li>Ohm's law gives the current through each branch: I<sub>1</sub> = V/R1, I<sub>2</sub> = V/R2.</li>
-            <li class="derivation-step-highlight" data-testid="derivation-step-kirchhoff">
+            <li data-testid="derivation-step-kirchhoff">
               Kirchhoff's current law: the current splits and recombines, so <strong>I = I<sub
                 >1</sub
               > + I<sub>2</sub></strong>.
             </li>
             <li>Substituting Ohm's law into that sum: V/R<sub>total</sub> = V/R1 + V/R2.</li>
-            <li>Dividing both sides by V: <strong>1/R<sub>total</sub> = 1/R1 + 1/R2</strong>.</li>
+            <li class="derivation-step-highlight" data-testid="derivation-step-total-resistance">
+              Dividing both sides by V: <strong>1/R<sub>total</sub> = 1/R1 + 1/R2</strong>.
+            </li>
           </ol>
         </div>
       </div>

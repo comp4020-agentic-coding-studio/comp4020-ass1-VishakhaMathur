@@ -199,12 +199,18 @@ describe("resistance derivation: hooks exist", () => {
     expect(doc?.querySelector('[data-testid="derivation-steps"]'), NEXT_STEP).toBeTruthy();
   });
 
-  it("highlights the step where total current equals I1 + I2", () => {
+  it("states the step where total current equals I1 + I2", () => {
     const step = doc?.querySelector('[data-testid="derivation-step-kirchhoff"]');
     expect(step, NEXT_STEP).toBeTruthy();
-    expect(step?.className).toContain("derivation-step-highlight");
     expect(step?.textContent).toContain("1");
     expect(step?.textContent).toContain("2");
+  });
+
+  it("highlights the final total-resistance formula", () => {
+    const step = doc?.querySelector('[data-testid="derivation-step-total-resistance"]');
+    expect(step, NEXT_STEP).toBeTruthy();
+    expect(step?.className).toContain("derivation-step-highlight");
+    expect(step?.textContent).toContain("Rtotal");
   });
 
 });
