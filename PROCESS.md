@@ -58,3 +58,23 @@ clean by grepping the built `dist/index.html` and the full test suite for
 every `challenge-*` selector both before and after, and rerunning `pnpm check`
 to see exactly those six tests disappear with nothing else breaking.
 ([`fd4b492`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-VishakhaMathur/commit/fd4b4924e150dc55ed2fa28192e8cd11a238a74a))
+
+**A restyle that passed `pnpm check` locally still broke CI, because the
+thing that failed only exists once the site is built for real.** Adding two
+self-hosted font packages made the compiled stylesheet balloon past Astro's
+own threshold for inlining it into a `<style>` tag, so it got emitted as an
+external `<link>` instead — pointing at a base-prefixed URL that resolves on
+the live site but 404s under `linkinator`'s flat scan of the local `dist/`
+folder, a check that only runs in CI, not in `pnpm check`. The actual cause
+took a moment to see: `assetsInlineLimit` had already been raised once before
+(to keep one small page script inlined for exactly this reason), and that
+same limit was now also base64-embedding a dozen font-file variants directly
+into the CSS. The fix wasn't to raise the limit further or turn off font
+loading — it was to make the limit stop applying to font files specifically,
+so the stylesheet shrank back under Astro's own inlining threshold on its
+own. I confirmed it by rebuilding locally (the stylesheet went back to an
+inlined `<style>` tag, `linkinator ./dist` passed, and the fonts still loaded
+with zero failed network requests), then watched the next CI run go green
+end to end, including the deploy's own "site is online" check.
+([`36ab389`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-VishakhaMathur/commit/36ab389b94a882ee3199424a8c21ad3313c23945),
+[`86ef72d`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-VishakhaMathur/commit/86ef72d44635b730c242dd5dd7872d721b295930))
