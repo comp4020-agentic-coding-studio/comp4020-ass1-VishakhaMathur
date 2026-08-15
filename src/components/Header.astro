@@ -3,6 +3,12 @@
 // toggle. Each page passes its own relative hrefs (this repo's nav links are
 // relative, not base-prefixed — see CLAUDE.md's note on why) plus which link
 // is "active", and supplies its own <h1>/intro text via the slot.
+//
+// Also the single shared place to load the display/body serif fonts used by
+// .title/.definition et al in global.css, so neither page imports them twice.
+import "@fontsource-variable/fraunces";
+import "@fontsource/source-serif-4";
+
 interface Props {
   homeHref: string;
   reviewHref: string;
