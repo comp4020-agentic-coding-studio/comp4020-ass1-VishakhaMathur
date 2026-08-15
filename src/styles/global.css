@@ -461,6 +461,11 @@ main {
   font-size: 1.1rem;
 }
 
+.experiment-success {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
 .resistance-quiz-guess {
   display: flex;
   gap: 0.6rem;

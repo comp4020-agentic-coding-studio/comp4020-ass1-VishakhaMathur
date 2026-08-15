@@ -195,6 +195,13 @@ describe("resistor experiment: hooks exist", () => {
     expect(doc?.querySelector('[data-testid="experiment-total"]'), NEXT_STEP).toBeTruthy();
   });
 
+  it("poses the reach-4-ohms challenge, with its success message hidden at the default (5Ω) state", () => {
+    expect(doc?.querySelector('[data-testid="experiment-challenge"]'), NEXT_STEP).toBeTruthy();
+    const success = doc?.querySelector('[data-testid="experiment-success"]');
+    expect(success, NEXT_STEP).toBeTruthy();
+    expect((success as HTMLElement | undefined)?.hidden).toBe(true);
+  });
+
   it("exposes both initial resistors with a slider, value readout, and remove button each", () => {
     for (const n of [1, 2]) {
       expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}"]`), NEXT_STEP).toBeTruthy();

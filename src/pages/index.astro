@@ -103,6 +103,14 @@ const experimentFlowSegments = [
   { x1: EXPERIMENT_RIGHT_X, y1: experimentLayout.returnY, x2: EXPERIMENT_LEFT_X, y2: experimentLayout.returnY },
 ];
 const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
+
+// The "reach 4Ω" challenge: exact match against the true computed total (not
+// the rounded display value), so a floating-point epsilon guards against
+// representation error rather than acting as a display-precision tolerance.
+const EXPERIMENT_TARGET_OHMS = 4;
+const EXPERIMENT_SUCCESS_EPSILON = 1e-9;
+const experimentIsInitialSuccess =
+  Math.abs(experimentInitialTotal - EXPERIMENT_TARGET_OHMS) < EXPERIMENT_SUCCESS_EPSILON;
 ---
 
 <!doctype html>
@@ -749,6 +757,10 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
         value, or add/remove resistors to add or remove parallel paths, and watch the total
         resistance respond immediately.
       </p>
+      <p class="callout experiment-challenge" data-testid="experiment-challenge">
+        Challenge: can you adjust the resistors so the total resistance is exactly
+        <strong>{EXPERIMENT_TARGET_OHMS}Ω</strong>?
+      </p>
       <div class="split-columns">
         <div class="split-diagram">
           <div class="parallel-check-board experiment-board" data-testid="experiment-board">
@@ -891,6 +903,12 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
           </button>
           <p class="callout experiment-total" data-testid="experiment-total" aria-live="polite">
             Total resistance: <strong>{experimentInitialTotal.toFixed(1)}Ω</strong>
+            <span
+              class="experiment-success"
+              data-testid="experiment-success"
+              {...(experimentIsInitialSuccess ? {} : { hidden: true })}
+              >✓ Nice! You've made a {EXPERIMENT_TARGET_OHMS}Ω circuit.</span
+            >
           </p>
         </div>
       </div>
@@ -1306,6 +1324,8 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
         const EXP_MIN_RESISTORS = 1;
         const EXP_MAX_RESISTORS = 20;
         const EXP_VOLTAGE = 12;
+        const EXP_TARGET_OHMS = 4;
+        const EXP_SUCCESS_EPSILON = 1e-9;
 
         let values = [10, 10];
 
@@ -1324,7 +1344,8 @@ const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
 
         function updateExperimentTotal() {
           const total = parallelResistance(values);
-          experimentTotal!.innerHTML = `Total resistance: <strong>${total.toFixed(1)}Ω</strong>`;
+          const isSuccess = Math.abs(total - EXP_TARGET_OHMS) < EXP_SUCCESS_EPSILON;
+          experimentTotal!.innerHTML = `Total resistance: <strong>${total.toFixed(1)}Ω</strong> <span class="experiment-success" data-testid="experiment-success"${isSuccess ? "" : " hidden"}>✓ Nice! You've made a ${EXP_TARGET_OHMS}Ω circuit.</span>`;
         }
 
         function experimentBranchMarkup(y: number, i: number, value: number): string {
