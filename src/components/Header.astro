@@ -1,54 +1,25 @@
 ---
-// Shared across every page: the primary nav (Home/Review) and the dark-mode
-// toggle. Each page passes its own relative hrefs (this repo's nav links are
-// relative, not base-prefixed — see CLAUDE.md's note on why) plus which link
-// is "active", and supplies its own <h1>/intro text via the slot.
+// The in-page section nav (jump links, not a multi-page nav — this is a
+// single scrolling page, review included).
 //
 // Also the single shared place to load the display/body serif fonts used by
-// .title/.definition et al in global.css, so neither page imports them twice.
+// .title/.definition et al in global.css, so index.astro doesn't import them
+// itself.
 import "@fontsource-variable/fraunces";
 import "@fontsource/source-serif-4";
-
-interface Props {
-  homeHref: string;
-  reviewHref: string;
-  active: "home" | "review";
-}
-
-const { homeHref, reviewHref, active } = Astro.props;
 ---
 
 <header class="site-header">
   <div class="site-header-bar">
-    <nav aria-label="Primary">
-      <a href={homeHref} aria-current={active === "home" ? "page" : undefined}>Home</a>
-      <a href={reviewHref} aria-current={active === "review" ? "page" : undefined}>Review</a>
+    <nav class="section-nav" aria-label="Sections">
+      <a href="#parallel-check-title">Understand</a>
+      <a href="#resistance-quiz-title">Quiz</a>
+      <a href="#highway-analogy-title">Highway</a>
+      <a href="#voltage-check-title">Voltage</a>
+      <a href="#derivation-title">Derivation</a>
+      <a href="#experiment-title">Experiment</a>
+      <a href="#review-title">Review</a>
     </nav>
-    <button type="button" class="theme-toggle" data-testid="theme-toggle" aria-pressed="false">
-      Dark mode
-    </button>
   </div>
   <slot />
 </header>
-
-<script>
-  // Independent of whatever the rest of a given page does, so it's wired up
-  // here rather than in each page's own script.
-  const themeToggle = document.querySelector<HTMLButtonElement>('[data-testid="theme-toggle"]');
-
-  function syncThemeToggleLabel(isDark: boolean) {
-    if (!themeToggle) return;
-    themeToggle.setAttribute("aria-pressed", String(isDark));
-    themeToggle.textContent = isDark ? "Light mode" : "Dark mode";
-  }
-
-  syncThemeToggleLabel(document.documentElement.dataset.theme === "dark");
-
-  themeToggle?.addEventListener("click", () => {
-    const isDark = document.documentElement.dataset.theme !== "dark";
-    if (isDark) document.documentElement.dataset.theme = "dark";
-    else delete document.documentElement.dataset.theme;
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-    syncThemeToggleLabel(isDark);
-  });
-</script>

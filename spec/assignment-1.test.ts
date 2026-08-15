@@ -60,19 +60,19 @@ describe("parallel connection check: drag-to-connect hooks exist", () => {
   });
 });
 
-// A review page (dist/review/index.html — Astro's directory build format)
-// where visitors can leave a star rating and comment. Static site, no
-// backend: submitting just shows a thank-you, nothing is persisted, so same
-// reasoning as above — only the hooks are checked here, the rating/submit/
-// reset interaction is exercised manually.
-describe("review page: rating and comment hooks exist", () => {
-  const distPath = resolve("dist/review/index.html");
+// The review section, now the last section on the page (dist/index.html)
+// rather than its own route, where visitors can leave a star rating and
+// comment. Static site, no backend: submitting just shows a thank-you,
+// nothing is persisted, so same reasoning as above — only the hooks are
+// checked here, the rating/submit/reset interaction is exercised manually.
+describe("review section: rating and comment hooks exist", () => {
+  const distPath = resolve("dist/index.html");
   const doc = existsSync(distPath)
     ? new JSDOM(readFileSync(distPath, "utf8")).window.document
     : null;
 
-  it("built", () => {
-    expect(existsSync(distPath), `${distPath} not found — run pnpm build first.`).toBe(true);
+  it("exposes the review section", () => {
+    expect(doc?.querySelector('[data-testid="review"]'), NEXT_STEP).toBeTruthy();
   });
 
   it("exposes five star-rating buttons and the comment box", () => {

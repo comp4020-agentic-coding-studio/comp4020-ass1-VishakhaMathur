@@ -130,17 +130,9 @@ const experimentIsInitialSuccess =
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Why more paths means less resistance</title>
-    <script is:inline>
-      // Runs before first paint so a returning dark-mode visitor never sees a
-      // flash of the light theme. Kept separate from the bundled module
-      // script below, which only runs after the DOM is parsed.
-      if (localStorage.getItem("theme") === "dark") {
-        document.documentElement.dataset.theme = "dark";
-      }
-    </script>
   </head>
   <body>
-    <Header homeHref="./" reviewHref="./review/" active="home">
+    <Header>
       <p class="eyebrow">A circuit, walked through</p>
       <h1 class="title">Resistors in Parallel</h1>
       <p class="definition" data-testid="parallel-definition">
@@ -151,8 +143,21 @@ const experimentIsInitialSuccess =
       {/* Controls the "current is flowing" hum in Check your understanding —
           the only section with sound. */}
       <div class="sound-volume" data-testid="sound-volume-control">
-        <label for="sound-volume-slider">Sound volume</label>
-        <input type="range" id="sound-volume-slider" data-testid="sound-volume-slider" min="0" max="100" value="100" />
+        <div class="sound-volume-row">
+          <label for="sound-volume-slider">Sound volume</label>
+          <input
+            type="range"
+            id="sound-volume-slider"
+            data-testid="sound-volume-slider"
+            min="0"
+            max="100"
+            value="100"
+            aria-describedby="sound-volume-hint"
+          />
+        </div>
+        <span class="sound-volume-hint" id="sound-volume-hint" data-testid="sound-volume-hint"
+          >Press 0/1 or drag to adjust</span
+        >
       </div>
     </Header>
 
@@ -1064,6 +1069,65 @@ const experimentIsInitialSuccess =
       </div>
     </section>
 
+    <section
+      class="parallel-check page-end"
+      data-testid="page-end"
+      aria-labelledby="page-end-title"
+      {...{ hidden: true }}
+    >
+      <h2 class="parallel-check-title page-end-title" id="page-end-title">Congratulations, you finished it!</h2>
+      <p class="page-end-message">
+        Thanks so much for making it to the end of the page. I hope it was worthwhile and you
+        learned something new!
+      </p>
+    </section>
+
+    <section
+      class="parallel-check review"
+      data-testid="review"
+      aria-labelledby="review-title"
+      {...{ hidden: true }}
+    >
+      <h2 class="parallel-check-title" id="review-title" data-testid="review-title">Please leave a review</h2>
+      <p class="parallel-check-instructions" data-testid="review-intro">
+        Tried out the parallel-resistors simulation? Tell us what you thought — a star rating, a
+        comment, or both.
+      </p>
+
+      <form data-testid="review-form" novalidate>
+        <fieldset class="rating">
+          <legend>Rating</legend>
+          <div class="stars" data-testid="rating-stars" role="radiogroup" aria-label="Rating out of 5">
+            {
+              [1, 2, 3, 4, 5].map((n) => (
+                <button
+                  type="button"
+                  class="star"
+                  data-testid={`rating-star-${n}`}
+                  data-value={n}
+                  role="radio"
+                  aria-checked="false"
+                  aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                >
+                  ★
+                </button>
+              ))
+            }
+          </div>
+        </fieldset>
+
+        <label for="review-comment">Comments (optional)</label>
+        <textarea
+          id="review-comment"
+          data-testid="review-comment"
+          rows="5"
+          placeholder="What worked, what didn't?"></textarea>
+
+        <button type="submit" class="review-submit" data-testid="review-submit">Submit review</button>
+      </form>
+      <p class="feedback" id="review-feedback" data-testid="review-feedback" aria-live="polite"></p>
+    </section>
+
     <script>
       import { current, parallelResistance, seriesResistance } from "../lib/circuit";
 
@@ -1075,9 +1139,30 @@ const experimentIsInitialSuccess =
       let checkHumRefresh: (() => void) | null = null;
 
       const volumeSlider = document.querySelector<HTMLInputElement>('[data-testid="sound-volume-slider"]');
-      volumeSlider?.addEventListener("input", () => {
-        masterVolume = Number(volumeSlider.value) / 100;
+
+      function setVolume(value: number) {
+        if (!volumeSlider) return;
+        const clamped = Math.min(100, Math.max(0, value));
+        volumeSlider.value = String(clamped);
+        masterVolume = clamped / 100;
         checkHumRefresh?.();
+      }
+
+      volumeSlider?.addEventListener("input", () => {
+        setVolume(Number(volumeSlider.value));
+      });
+
+      // Keyboard shortcut: 1 turns the volume up, 0 turns it down, in
+      // VOLUME_KEY_STEP increments — an alternative to dragging the slider
+      // that works from anywhere on the page, not just while it's focused.
+      const VOLUME_KEY_STEP = 10;
+      document.addEventListener("keydown", (event) => {
+        if (!volumeSlider || event.altKey || event.ctrlKey || event.metaKey) return;
+        if (event.key === "1") {
+          setVolume(Number(volumeSlider.value) + VOLUME_KEY_STEP);
+        } else if (event.key === "0") {
+          setVolume(Number(volumeSlider.value) - VOLUME_KEY_STEP);
+        }
       });
 
       // A comprehension check for the "same two points" definition of
@@ -1333,6 +1418,73 @@ const experimentIsInitialSuccess =
       // Revealed by the same Drive click, right alongside the derivation —
       // "here's the proof" and "now go play with it" land at the same time.
       const experimentSection = document.querySelector<HTMLElement>('[data-testid="experiment"]');
+      // Revealed by the same Drive click, right after the closing note — the
+      // last section on the page.
+      const reviewSection = document.querySelector<HTMLElement>('[data-testid="review"]');
+      // The closing note — only shown once the visitor actually reaches the
+      // end of the experiment, not merely once it's unlocked. While
+      // experiment stays hidden this never fires; after the Drive click
+      // unhides it, this fires the first time it scrolls into view.
+      const pageEndSection = document.querySelector<HTMLElement>('[data-testid="page-end"]');
+      if (experimentSection && pageEndSection) {
+        const pageEndObserver = new IntersectionObserver(([entry]) => {
+          if (entry.isIntersecting) {
+            pageEndSection.removeAttribute("hidden");
+            pageEndObserver.disconnect();
+          }
+        });
+        pageEndObserver.observe(experimentSection);
+      }
+
+      // Star rating + comment form, formerly its own /review page — no
+      // backend to send this to, so submitting just shows a thank-you,
+      // nothing is persisted.
+      const reviewTitle = document.querySelector<HTMLElement>('[data-testid="review-title"]');
+      const reviewForm = document.querySelector<HTMLFormElement>('[data-testid="review-form"]');
+      const reviewIntro = document.querySelector<HTMLElement>('[data-testid="review-intro"]');
+      const reviewStars = [1, 2, 3, 4, 5]
+        .map((n) => document.querySelector<HTMLButtonElement>(`[data-testid="rating-star-${n}"]`))
+        .filter((el): el is HTMLButtonElement => el !== null);
+      const reviewComment = document.querySelector<HTMLTextAreaElement>('[data-testid="review-comment"]');
+      const reviewFeedback = document.querySelector<HTMLElement>('[data-testid="review-feedback"]');
+
+      if (reviewSection && reviewTitle && reviewForm && reviewIntro && reviewStars.length === 5 && reviewComment && reviewFeedback) {
+        let rating = 0;
+
+        function renderRating() {
+          reviewStars.forEach((star, i) => {
+            const value = i + 1;
+            star.setAttribute("aria-checked", String(value === rating));
+            star.classList.toggle("filled", value <= rating);
+          });
+        }
+
+        reviewStars.forEach((star, i) => {
+          star.addEventListener("click", () => {
+            rating = i + 1;
+            renderRating();
+          });
+        });
+
+        reviewForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (rating === 0) {
+            reviewFeedback.textContent = "Choose a star rating before submitting.";
+            return;
+          }
+          // Once submitted there's nothing left to do here, so the prompt,
+          // intro, and form make way for a single thank-you message instead
+          // of leaving "Please leave a review" sitting above an
+          // already-submitted review.
+          reviewTitle.setAttribute("hidden", "");
+          reviewIntro.setAttribute("hidden", "");
+          reviewForm.setAttribute("hidden", "");
+          reviewFeedback.textContent = "Thank you so much for leaving a review!";
+          // The heading we just hid was the section's accessible name —
+          // hand that job to the thank-you message instead.
+          reviewSection.setAttribute("aria-labelledby", "review-feedback");
+        });
+      }
 
       if (quizIncreaseBtn && quizDecreaseBtn && quizFeedback && quizFeedbackVerdict) {
         function answerQuiz(guess: "increase" | "decrease") {
@@ -1788,6 +1940,7 @@ const experimentIsInitialSuccess =
           voltageCheckSection?.removeAttribute("hidden");
           derivationSection?.removeAttribute("hidden");
           experimentSection?.removeAttribute("hidden");
+          reviewSection?.removeAttribute("hidden");
         });
       }
     </script>
