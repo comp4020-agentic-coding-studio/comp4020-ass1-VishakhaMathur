@@ -17,6 +17,7 @@
   /* Fixed regardless of theme: the circuit SVGs draw fixed dark strokes
      (#333) that only read clearly against a light backing. */
   --color-diagram-bg: #f9fafc;
+
   /* Same reasoning: the road surface/shoulder are fixed real-world colors,
      not part of the page's own light/dark palette. */
   --color-road: #4b4f5c;
@@ -207,7 +208,9 @@ main {
    drag interaction to solve), so their flow lines run unconditionally
    rather than gating on [data-solved="true"]. */
 .derivation-flow-line,
-.experiment-flow-line {
+.experiment-flow-line,
+.voltage-check-flow-line,
+.challenge-flow-line {
   opacity: 1;
   animation: parallel-current-flow 0.6s linear infinite;
 }
@@ -220,7 +223,9 @@ main {
 
 @media (prefers-reduced-motion: reduce) {
   .derivation-flow-line,
-  .experiment-flow-line {
+  .experiment-flow-line,
+  .voltage-check-flow-line,
+  .challenge-flow-line {
     animation: none;
   }
 
@@ -388,6 +393,14 @@ main {
   font-size: 0.95rem;
 }
 
+.derivation-step-highlight {
+  background: var(--color-accent-soft);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  margin-left: -0.75rem;
+}
+
 .derivation-controls {
   display: flex;
   align-items: center;
@@ -443,14 +456,14 @@ main {
   font-size: 1rem;
 }
 
+.experiment-add {
+  align-self: flex-start;
+}
+
 .experiment-resistor-row-remove:disabled,
 .experiment-add:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.experiment-add {
-  align-self: flex-start;
 }
 
 .experiment-total {
@@ -478,6 +491,58 @@ main {
 }
 
 .resistance-quiz-feedback[data-correct="false"] [data-testid="resistance-quiz-feedback-verdict"] {
+  color: var(--color-pending);
+}
+
+.challenge-answer-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.challenge-answer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.challenge-answer-row label {
+  flex: 1 1 auto;
+}
+
+.challenge-answer-row input[type="number"] {
+  flex: 0 0 6rem;
+  width: 6rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.challenge-answer-mark {
+  flex-shrink: 0;
+  width: 1.2rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.challenge-answer-mark-correct {
+  color: var(--color-success);
+}
+
+.challenge-answer-mark-incorrect {
+  color: #dc2626;
+}
+
+.challenge-check {
+  align-self: flex-start;
+}
+
+.challenge-feedback[data-all-correct="true"] [data-testid="challenge-feedback-verdict"] {
+  color: var(--color-success);
+}
+
+.challenge-feedback[data-all-correct="false"] [data-testid="challenge-feedback-verdict"] {
   color: var(--color-pending);
 }
 
@@ -576,6 +641,65 @@ a:hover {
   border-radius: var(--radius-sm);
   padding: 0.85rem 1.1rem;
   font-size: 0.95rem;
+}
+
+.voltage-check-currents {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.voltage-check-current {
+  flex: 1 1 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  background: #fff3cd;
+  border: 1px solid #e63946;
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.voltage-check-current-label {
+  font-weight: 700;
+  color: #b45309;
+}
+
+.voltage-check-current-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.experiment-currents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.experiment-current {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  background: #fff3cd;
+  border: 1px solid #e63946;
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.experiment-current-label {
+  font-weight: 700;
+  color: #b45309;
+}
+
+.experiment-current-value {
+  font-weight: 700;
+  color: #b45309;
 }
 
 button {

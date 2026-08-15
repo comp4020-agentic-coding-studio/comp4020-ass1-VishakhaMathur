@@ -126,6 +126,53 @@ describe("highway analogy: hooks exist", () => {
   });
 });
 
+// Voltage-across-branches, revealed alongside the derivation by the same
+// Drive click: the same closed 2-resistor board, but with a voltmeter on each
+// branch, a slider per resistor, and a current readout per branch below the
+// controls, so a visitor can change R1/R2 and see the voltmeters stay locked
+// together while only the currents move. Structural hooks only, same
+// reasoning as above.
+describe("voltage across parallel branches: hooks exist", () => {
+  const distPath = resolve("dist/index.html");
+  const doc = existsSync(distPath)
+    ? new JSDOM(readFileSync(distPath, "utf8")).window.document
+    : null;
+
+  it("exposes the section, board, and controls panel", () => {
+    expect(doc?.querySelector('[data-testid="voltage-check"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="voltage-check-board"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="voltage-check-controls"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("exposes both branches with a slider, value readout, and voltmeter each", () => {
+    for (const n of [1, 2]) {
+      expect(doc?.querySelector(`[data-testid="voltage-check-resistor-${n}"]`), NEXT_STEP).toBeTruthy();
+      expect(doc?.querySelector(`[data-testid="voltage-check-resistor-${n}-slider"]`), NEXT_STEP).toBeTruthy();
+      expect(doc?.querySelector(`[data-testid="voltage-check-resistor-${n}-value"]`), NEXT_STEP).toBeTruthy();
+      expect(doc?.querySelector(`[data-testid="voltage-check-voltmeter-${n}"]`), NEXT_STEP).toBeTruthy();
+    }
+  });
+
+  it("shows both voltmeters reading the same voltage at the default state", () => {
+    const v1 = doc?.querySelector('[data-testid="voltage-check-voltmeter-1"]')?.textContent;
+    const v2 = doc?.querySelector('[data-testid="voltage-check-voltmeter-2"]')?.textContent;
+    expect(v1, NEXT_STEP).toBeTruthy();
+    expect(v1?.split(":")[1]?.trim()).toBe(v2?.split(":")[1]?.trim());
+  });
+
+  it("exposes the summary callout", () => {
+    expect(doc?.querySelector('[data-testid="voltage-check-summary"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("exposes a separate, clearly-labelled current readout for each branch below the summary", () => {
+    for (const n of [1, 2]) {
+      const readout = doc?.querySelector(`[data-testid="voltage-check-current-readout-${n}"]`);
+      expect(readout, NEXT_STEP).toBeTruthy();
+      expect(readout?.textContent).toContain(`I${n}:`);
+    }
+  });
+});
+
 // The formal derivation, revealed once the visitor presses Drive on the
 // highway section: the same closed parallel circuit as "Check your
 // understanding," with total current I shown splitting into I1/I2 and
@@ -153,6 +200,14 @@ describe("resistance derivation: hooks exist", () => {
     expect(doc?.querySelector('[data-testid="derivation-steps"]'), NEXT_STEP).toBeTruthy();
   });
 
+  it("highlights the step where total current equals I1 + I2", () => {
+    const step = doc?.querySelector('[data-testid="derivation-step-kirchhoff"]');
+    expect(step, NEXT_STEP).toBeTruthy();
+    expect(step?.className).toContain("derivation-step-highlight");
+    expect(step?.textContent).toContain("1");
+    expect(step?.textContent).toContain("2");
+  });
+
   it("exposes its own sound toggle for the current-flow hum", () => {
     expect(doc?.querySelector('[data-testid="derivation-sound-toggle"]'), NEXT_STEP).toBeTruthy();
   });
@@ -176,7 +231,7 @@ describe("master volume slider: hook exists", () => {
 // circuit, but with an adjustable resistor count and sliders, so a visitor
 // can change values or add/remove resistors and watch the total resistance
 // respond live. Unlike the other boards, resistor count varies at runtime —
-// these hooks only check the built page's initial two-resistor state;
+// these hooks only check the built page's initial three-resistor state;
 // adding/removing/dragging is exercised manually.
 describe("resistor experiment: hooks exist", () => {
   const distPath = resolve("dist/index.html");
@@ -195,20 +250,67 @@ describe("resistor experiment: hooks exist", () => {
     expect(doc?.querySelector('[data-testid="experiment-total"]'), NEXT_STEP).toBeTruthy();
   });
 
-  it("poses the reach-4-ohms challenge, with its success message hidden at the default (5Ω) state", () => {
+  it("poses the reach-7-ohms challenge, with its success message hidden at the default (~3.3Ω) state", () => {
     expect(doc?.querySelector('[data-testid="experiment-challenge"]'), NEXT_STEP).toBeTruthy();
     const success = doc?.querySelector('[data-testid="experiment-success"]');
     expect(success, NEXT_STEP).toBeTruthy();
     expect((success as HTMLElement | undefined)?.hidden).toBe(true);
   });
 
-  it("exposes both initial resistors with a slider, value readout, and remove button each", () => {
-    for (const n of [1, 2]) {
+  it("exposes all three initial resistors with a slider, value readout, and remove button each", () => {
+    for (const n of [1, 2, 3]) {
       expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}"]`), NEXT_STEP).toBeTruthy();
       expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}-slider"]`), NEXT_STEP).toBeTruthy();
       expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}-value"]`), NEXT_STEP).toBeTruthy();
       expect(doc?.querySelector(`[data-testid="experiment-resistor-${n}-remove"]`), NEXT_STEP).toBeTruthy();
     }
+  });
+
+  it("exposes a separate current readout for each branch below the total-resistance card", () => {
+    expect(doc?.querySelector('[data-testid="experiment-currents"]'), NEXT_STEP).toBeTruthy();
+    for (const n of [1, 2, 3]) {
+      const readout = doc?.querySelector(`[data-testid="experiment-current-readout-${n}"]`);
+      expect(readout, NEXT_STEP).toBeTruthy();
+      expect(readout?.textContent).toContain(`I${n}:`);
+    }
+  });
+});
+
+// These hooks only check the built page's fixed challenge circuit and its
+// answer-checking UI structure; typing into the inputs and clicking "Check
+// my answers" is exercised manually, same reasoning as every other slider
+// section above (jsdom cannot reliably drive synthetic input/click events).
+describe("resistor challenge: hooks exist", () => {
+  const distPath = resolve("dist/index.html");
+  const doc = existsSync(distPath)
+    ? new JSDOM(readFileSync(distPath, "utf8")).window.document
+    : null;
+
+  it("exposes the section, board, and controls panel", () => {
+    expect(doc?.querySelector('[data-testid="challenge"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="challenge-board"]'), NEXT_STEP).toBeTruthy();
+    expect(doc?.querySelector('[data-testid="challenge-controls"]'), NEXT_STEP).toBeTruthy();
+  });
+
+  it("draws all three fixed branch resistors on the circuit diagram", () => {
+    for (const n of [1, 2, 3]) {
+      expect(doc?.querySelector(`[data-testid="challenge-resistor-${n}"]`), NEXT_STEP).toBeTruthy();
+    }
+  });
+
+  it("exposes an answer input and a hidden result mark for total resistance, total current, and each branch current", () => {
+    for (const testid of ["total-resistance", "total-current", "i1", "i2", "i3"]) {
+      expect(doc?.querySelector(`[data-testid="challenge-input-${testid}"]`), NEXT_STEP).toBeTruthy();
+      expect(doc?.querySelector(`[data-testid="challenge-mark-${testid}"]`), NEXT_STEP).toBeTruthy();
+    }
+  });
+
+  it("exposes a check-answers button and a feedback callout that starts hidden", () => {
+    expect(doc?.querySelector('[data-testid="challenge-check"]'), NEXT_STEP).toBeTruthy();
+    const feedback = doc?.querySelector('[data-testid="challenge-feedback"]');
+    expect(feedback, NEXT_STEP).toBeTruthy();
+    expect((feedback as HTMLElement | undefined)?.hidden).toBe(true);
+    expect(doc?.querySelector('[data-testid="challenge-feedback-verdict"]'), NEXT_STEP).toBeTruthy();
   });
 });
 

@@ -5,7 +5,7 @@ import Header from "../components/Header.astro";
 import HighwayBump from "../components/HighwayBump.astro";
 import HighwayCar from "../components/HighwayCar.astro";
 import resistorIcon from "../components/resistor.png?url";
-import { parallelResistance } from "../lib/circuit";
+import { current, parallelResistance } from "../lib/circuit";
 
 const VOLTAGE = 12;
 const DEFAULT_RESISTANCE = 10;
@@ -56,6 +56,15 @@ const CHECK_FLOW_SEGMENTS = [
   { x1: CHECK_RIGHT_X, y1: CHECK_RETURN_Y, x2: CHECK_LEFT_X, y2: CHECK_RETURN_Y },
 ];
 
+// Voltage-across-branches board: reuses the exact same closed 2-resistor
+// layout as the resistance quiz/derivation boards above (same rails, same
+// battery, same CHECK_* geometry) since the point here isn't a different
+// circuit, it's the same one viewed through a voltmeter — both branches
+// bridge the same two rails, so both read the battery's own voltage no
+// matter what their resistance is; only the current (Ohm's law, V/R)
+// differs per branch.
+const VOLTAGE_CHECK_DEFAULT_VALUES = [DEFAULT_RESISTANCE, DEFAULT_RESISTANCE];
+
 // Highway analogy: a speed bump stands in for a resistor (HighwayBump reuses
 // a resistor body's own fill/stroke) and a car for current. Both boards
 // share one viewBox so the same pct() math positions either lane layout.
@@ -80,7 +89,7 @@ const EXPERIMENT_BUS_TOP_Y = 90;
 const EXPERIMENT_BRANCH_SPACING = 55;
 const EXPERIMENT_MIN_RESISTORS = 1;
 const EXPERIMENT_MAX_RESISTORS = 20;
-const EXPERIMENT_DEFAULT_VALUES = [10, 10];
+const EXPERIMENT_DEFAULT_VALUES = [10, 10, 10];
 
 function experimentBranchYsFor(n: number): number[] {
   return Array.from({ length: n }, (_, i) => EXPERIMENT_BUS_TOP_Y + i * EXPERIMENT_BRANCH_SPACING);
@@ -104,13 +113,34 @@ const experimentFlowSegments = [
 ];
 const experimentInitialTotal = parallelResistance(EXPERIMENT_DEFAULT_VALUES);
 
-// The "reach 4Ω" challenge: exact match against the true computed total (not
-// the rounded display value), so a floating-point epsilon guards against
-// representation error rather than acting as a display-precision tolerance.
-const EXPERIMENT_TARGET_OHMS = 4;
-const EXPERIMENT_SUCCESS_EPSILON = 1e-9;
+// The "reach 7Ω" challenge: success matches the *displayed* total (rounded to
+// one decimal), not a bit-exact float comparison — with three sliders, exact
+// integer combinations are hard to land on by trial and error, so a visitor
+// who drags to what the readout already shows as "7.0Ω" must see the
+// checkmark, even if the underlying float is 6.98 or 7.02.
+const EXPERIMENT_TARGET_OHMS = 7;
+const EXPERIMENT_SUCCESS_EPSILON = 0.05;
 const experimentIsInitialSuccess =
   Math.abs(experimentInitialTotal - EXPERIMENT_TARGET_OHMS) < EXPERIMENT_SUCCESS_EPSILON;
+
+// The final challenge: a fixed (not adjustable) three-resistor board, reusing
+// the experiment board's geometry helper since three branches is exactly what
+// it already lays out. Values are chosen so every answer — Rtotal, Itotal,
+// and each branch current — is a clean one-decimal number, so a visitor's
+// typed answer can be checked against the same epsilon used above without
+// the "6.98 reads as 7.0" ambiguity that motivated EXPERIMENT_SUCCESS_EPSILON.
+const CHALLENGE_RESISTANCES = [6, 12, 4];
+const CHALLENGE_VOLTAGE = VOLTAGE;
+const challengeLayout = experimentLayoutFor(CHALLENGE_RESISTANCES.length);
+const challengeFlowSegments = [
+  { x1: EXPERIMENT_LEFT_X, y1: challengeLayout.entryY, x2: EXPERIMENT_LEFT_X, y2: EXPERIMENT_BUS_TOP_Y },
+  ...challengeLayout.branchYs.map((y) => ({ x1: EXPERIMENT_LEFT_X, y1: y, x2: EXPERIMENT_RIGHT_X, y2: y })),
+  { x1: EXPERIMENT_RIGHT_X, y1: EXPERIMENT_BUS_TOP_Y, x2: EXPERIMENT_RIGHT_X, y2: challengeLayout.returnY },
+  { x1: EXPERIMENT_RIGHT_X, y1: challengeLayout.returnY, x2: EXPERIMENT_LEFT_X, y2: challengeLayout.returnY },
+];
+const CHALLENGE_TOTAL_RESISTANCE = parallelResistance(CHALLENGE_RESISTANCES);
+const CHALLENGE_TOTAL_CURRENT = current(CHALLENGE_VOLTAGE, CHALLENGE_TOTAL_RESISTANCE);
+const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALLENGE_VOLTAGE, r));
 ---
 
 <!doctype html>
@@ -533,6 +563,154 @@ const experimentIsInitialSuccess =
     </section>
 
     <section
+      class="parallel-check voltage-check"
+      data-testid="voltage-check"
+      aria-labelledby="voltage-check-title"
+      {...{ hidden: true }}
+    >
+      <h2 class="parallel-check-title" id="voltage-check-title">Same two points, same voltage</h2>
+      <p class="parallel-check-instructions">
+        This is the same closed pair from "Check your understanding" — both resistors still bridge the
+        same two rails. Drag either slider to change R1 or R2 and watch the readouts: the voltmeter on
+        each branch always matches the battery, because they're both measured across the very same two
+        points. Only the ammeter — the current through that one branch — moves.
+      </p>
+      <div class="split-columns">
+        <div class="split-diagram">
+          <div class="parallel-check-board voltage-check-board" data-testid="voltage-check-board">
+            <svg
+              class="parallel-check-circuit"
+              data-testid="voltage-check-circuit"
+              viewBox={`0 0 ${CHECK_VIEWBOX.width} ${CHECK_VIEWBOX.height}`}
+              role="img"
+              aria-label="A closed parallel circuit with a voltmeter and ammeter reading on each branch"
+            >
+              <line
+                x1={CHECK_LEFT_X}
+                y1={CHECK_BUS_TOP_Y}
+                x2={CHECK_LEFT_X}
+                y2={CHECK_ENTRY_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              <line
+                x1={CHECK_RIGHT_X}
+                y1={CHECK_BUS_TOP_Y}
+                x2={CHECK_RIGHT_X}
+                y2={CHECK_RETURN_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              <line
+                x1={CHECK_LEFT_X}
+                y1={CHECK_RETURN_Y}
+                x2={CHECK_RIGHT_X}
+                y2={CHECK_RETURN_Y}
+                stroke="#333"
+                stroke-width="3"
+              />
+              <Battery x={CHECK_BATTERY.x} y={CHECK_BATTERY.y} voltage={VOLTAGE} testid="voltage-check-battery" />
+              <g data-testid="voltage-check-branches">
+                {CHECK_BRANCH_Y.map((y, i) => (
+                  <>
+                    <circle cx={CHECK_LEFT_X} cy={y} r="4" fill="#333" />
+                    <circle cx={CHECK_RIGHT_X} cy={y} r="4" fill="#333" />
+                    <g data-testid={`voltage-check-resistor-${i + 1}-branch`}>
+                      <line x1={CHECK_LEFT_X} y1={y} x2={CHECK_LEFT_X + 60} y2={y} stroke="#333" stroke-width="3" />
+                      <rect
+                        x={CHECK_LEFT_X + 60}
+                        y={y - 14}
+                        width={CHECK_RIGHT_X - 60 - (CHECK_LEFT_X + 60)}
+                        height="28"
+                        rx="4"
+                        fill="#fff3cd"
+                        stroke="#e63946"
+                        stroke-width="2"
+                      />
+                      {/* Stacked above the box, voltmeter topmost: both
+                          readings sit clear of the resistor rect rather than
+                          crowding it. Current is read from the labelled
+                          I1/I2 boxes below the controls panel, not in the
+                          diagram itself. */}
+                      <text
+                        data-testid={`voltage-check-voltmeter-${i + 1}`}
+                        x={(CHECK_LEFT_X + CHECK_RIGHT_X) / 2}
+                        y={y - 34}
+                        text-anchor="middle"
+                        font-size="14"
+                        font-weight="700"
+                        fill="#4f46e5">V{i + 1}: {VOLTAGE.toFixed(1)}V</text
+                      >
+                      <text
+                        data-testid={`voltage-check-resistor-${i + 1}-label`}
+                        x={(CHECK_LEFT_X + CHECK_RIGHT_X) / 2}
+                        y={y - 18}
+                        text-anchor="middle"
+                        font-size="14"
+                        font-weight="600">R{i + 1}: {VOLTAGE_CHECK_DEFAULT_VALUES[i]}Ω</text
+                      >
+                      <line x1={CHECK_RIGHT_X - 60} y1={y} x2={CHECK_RIGHT_X} y2={y} stroke="#333" stroke-width="3" />
+                    </g>
+                  </>
+                ))}
+              </g>
+              {/* Always-flowing, same reasoning as the derivation board: this
+                  circuit is already closed, not gated behind a drag-to-solve
+                  state. */}
+              <g aria-hidden="true" data-testid="voltage-check-current-flow">
+                {CHECK_FLOW_SEGMENTS.map((segment) => (
+                  <line
+                    x1={segment.x1}
+                    y1={segment.y1}
+                    x2={segment.x2}
+                    y2={segment.y2}
+                    class="current-flow-line voltage-check-flow-line"
+                  />
+                ))}
+              </g>
+            </svg>
+          </div>
+        </div>
+        <div class="experiment-controls voltage-check-controls" data-testid="voltage-check-controls">
+          <div class="experiment-resistor-rows">
+            {VOLTAGE_CHECK_DEFAULT_VALUES.map((value, i) => (
+              <div class="experiment-resistor-row" data-testid={`voltage-check-resistor-${i + 1}`}>
+                <span class="experiment-resistor-row-label">R{i + 1}</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="100"
+                  step="1"
+                  value={value}
+                  data-testid={`voltage-check-resistor-${i + 1}-slider`}
+                  aria-label={`Resistance of R${i + 1} in ohms`}
+                />
+                <span class="experiment-resistor-row-value" data-testid={`voltage-check-resistor-${i + 1}-value`}
+                  >{value} Ω</span
+                >
+              </div>
+            ))}
+          </div>
+          <p class="callout voltage-check-summary" data-testid="voltage-check-summary">
+            Both voltmeters read <strong>{VOLTAGE.toFixed(1)}V</strong>, no matter what R1 and R2 are —
+            only the current each branch draws changes.
+          </p>
+          <div class="voltage-check-currents" data-testid="voltage-check-currents">
+            {VOLTAGE_CHECK_DEFAULT_VALUES.map((value, i) => (
+              <p
+                class="voltage-check-current"
+                data-testid={`voltage-check-current-readout-${i + 1}`}
+              >
+                <span class="voltage-check-current-label">I{i + 1}:</span>
+                <span class="voltage-check-current-value">{current(VOLTAGE, value).toFixed(2)}A</span>
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section
       class="parallel-check derivation"
       data-testid="derivation"
       aria-labelledby="derivation-title"
@@ -723,10 +901,10 @@ const experimentIsInitialSuccess =
               > = I<sub>1</sub>·R1 = I<sub>2</sub>·R2.
             </li>
             <li>Ohm's law gives the current through each branch: I<sub>1</sub> = V/R1, I<sub>2</sub> = V/R2.</li>
-            <li>
-              Kirchhoff's current law: the current splits and recombines, so I = I<sub>1</sub> + I<sub
-                >2</sub
-              >.
+            <li class="derivation-step-highlight" data-testid="derivation-step-kirchhoff">
+              Kirchhoff's current law: the current splits and recombines, so <strong>I = I<sub
+                >1</sub
+              > + I<sub>2</sub></strong>.
             </li>
             <li>Substituting Ohm's law into that sum: V/R<sub>total</sub> = V/R1 + V/R2.</li>
             <li>Dividing both sides by V: <strong>1/R<sub>total</sub> = 1/R1 + 1/R2</strong>.</li>
@@ -910,12 +1088,204 @@ const experimentIsInitialSuccess =
               >✓ Nice! You've made a {EXPERIMENT_TARGET_OHMS}Ω circuit.</span
             >
           </p>
+          <div class="experiment-currents" data-testid="experiment-currents">
+            {EXPERIMENT_DEFAULT_VALUES.map((value, i) => (
+              <p class="experiment-current" data-testid={`experiment-current-readout-${i + 1}`}>
+                <span class="experiment-current-label">I{i + 1}:</span>
+                <span class="experiment-current-value">{current(VOLTAGE, value).toFixed(2)}A</span>
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="parallel-check challenge"
+      data-testid="challenge"
+      aria-labelledby="challenge-title"
+      {...{ hidden: true }}
+    >
+      <h2 class="parallel-check-title" id="challenge-title">Challenge: work out the currents</h2>
+      <p class="parallel-check-instructions">
+        One more circuit, but this time you do the maths. Three resistors in parallel across a
+        {CHALLENGE_VOLTAGE}V battery. Using what you've learned above — every branch shares the same
+        voltage, Ohm's law gives each branch's current, and the branch currents add up to the total —
+        work out the total resistance, the total current, and the current through each branch. Type
+        your answers in, then check your work.
+      </p>
+      <div class="split-columns">
+        <div class="split-diagram">
+          <div class="parallel-check-board challenge-board" data-testid="challenge-board">
+            <svg
+              class="parallel-check-circuit"
+              data-testid="challenge-circuit"
+              viewBox={`0 0 ${EXPERIMENT_VIEWBOX_WIDTH} ${challengeLayout.viewboxHeight}`}
+              role="img"
+              aria-label="A closed parallel circuit with three resistors across a 12 volt battery"
+            >
+              <g data-testid="challenge-frame">
+                <line
+                  x1={EXPERIMENT_LEFT_X}
+                  y1={EXPERIMENT_BUS_TOP_Y}
+                  x2={EXPERIMENT_LEFT_X}
+                  y2={challengeLayout.entryY}
+                  stroke="#333"
+                  stroke-width="3"
+                />
+                <line
+                  x1={EXPERIMENT_RIGHT_X}
+                  y1={EXPERIMENT_BUS_TOP_Y}
+                  x2={EXPERIMENT_RIGHT_X}
+                  y2={challengeLayout.returnY}
+                  stroke="#333"
+                  stroke-width="3"
+                />
+                <line
+                  x1={EXPERIMENT_LEFT_X}
+                  y1={challengeLayout.returnY}
+                  x2={EXPERIMENT_RIGHT_X}
+                  y2={challengeLayout.returnY}
+                  stroke="#333"
+                  stroke-width="3"
+                />
+                <Battery
+                  x={EXPERIMENT_LEFT_X}
+                  y={challengeLayout.batteryY}
+                  voltage={CHALLENGE_VOLTAGE}
+                  testid="challenge-battery"
+                />
+              </g>
+              <g data-testid="challenge-branches">
+                {challengeLayout.branchYs.map((y, i) => (
+                  <>
+                    <circle cx={EXPERIMENT_LEFT_X} cy={y} r="4" fill="#333" />
+                    <circle cx={EXPERIMENT_RIGHT_X} cy={y} r="4" fill="#333" />
+                    <g data-testid={`challenge-resistor-${i + 1}`}>
+                      <line
+                        x1={EXPERIMENT_LEFT_X}
+                        y1={y}
+                        x2={EXPERIMENT_LEFT_X + 60}
+                        y2={y}
+                        stroke="#333"
+                        stroke-width="3"
+                      />
+                      <rect
+                        x={EXPERIMENT_LEFT_X + 60}
+                        y={y - 14}
+                        width={EXPERIMENT_RIGHT_X - 60 - (EXPERIMENT_LEFT_X + 60)}
+                        height="28"
+                        rx="4"
+                        fill="#fff3cd"
+                        stroke="#e63946"
+                        stroke-width="2"
+                      />
+                      <text
+                        x={(EXPERIMENT_LEFT_X + EXPERIMENT_RIGHT_X) / 2}
+                        y={y + 5}
+                        text-anchor="middle"
+                        font-size="13"
+                        font-weight="600">R{i + 1}: {CHALLENGE_RESISTANCES[i]}Ω</text
+                      >
+                      <line
+                        x1={EXPERIMENT_RIGHT_X - 60}
+                        y1={y}
+                        x2={EXPERIMENT_RIGHT_X}
+                        y2={y}
+                        stroke="#333"
+                        stroke-width="3"
+                      />
+                    </g>
+                  </>
+                ))}
+              </g>
+              <g aria-hidden="true" data-testid="challenge-current-flow">
+                {challengeFlowSegments.map((segment) => (
+                  <line
+                    x1={segment.x1}
+                    y1={segment.y1}
+                    x2={segment.x2}
+                    y2={segment.y2}
+                    class="current-flow-line challenge-flow-line"
+                  />
+                ))}
+              </g>
+            </svg>
+          </div>
+        </div>
+        <div class="experiment-controls challenge-controls" data-testid="challenge-controls">
+          <div class="challenge-answer-rows">
+            <div class="challenge-answer-row" data-testid="challenge-answer-total-resistance">
+              <label for="challenge-input-total-resistance">Total resistance (Ω)</label>
+              <input
+                type="number"
+                step="any"
+                id="challenge-input-total-resistance"
+                data-testid="challenge-input-total-resistance"
+              />
+              <span
+                class="challenge-answer-mark"
+                data-testid="challenge-mark-total-resistance"
+                aria-hidden="true"
+              ></span>
+            </div>
+            <div class="challenge-answer-row" data-testid="challenge-answer-total-current">
+              <label for="challenge-input-total-current">Total current (A)</label>
+              <input
+                type="number"
+                step="any"
+                id="challenge-input-total-current"
+                data-testid="challenge-input-total-current"
+              />
+              <span class="challenge-answer-mark" data-testid="challenge-mark-total-current" aria-hidden="true"
+              ></span>
+            </div>
+            {CHALLENGE_RESISTANCES.map((_, i) => (
+              <div class="challenge-answer-row" data-testid={`challenge-answer-i${i + 1}`}>
+                <label for={`challenge-input-i${i + 1}`}>I{i + 1} (A)</label>
+                <input
+                  type="number"
+                  step="any"
+                  id={`challenge-input-i${i + 1}`}
+                  data-testid={`challenge-input-i${i + 1}`}
+                />
+                <span class="challenge-answer-mark" data-testid={`challenge-mark-i${i + 1}`} aria-hidden="true"
+                ></span>
+              </div>
+            ))}
+          </div>
+          <button type="button" class="challenge-check" data-testid="challenge-check">Check my answers</button>
+          <div
+            class="callout challenge-feedback"
+            data-testid="challenge-feedback"
+            aria-live="polite"
+            {...{ hidden: true }}
+          >
+            <p>
+              <strong data-testid="challenge-feedback-verdict"></strong>
+            </p>
+            <p>
+              Worked solution: every branch shares {CHALLENGE_VOLTAGE}V, so 1/R<sub>total</sub> = 1/{
+                CHALLENGE_RESISTANCES[0]
+              } + 1/{CHALLENGE_RESISTANCES[1]} + 1/{CHALLENGE_RESISTANCES[2]}, giving R<sub>total</sub> = {
+                CHALLENGE_TOTAL_RESISTANCE
+              }Ω. Total current I = V/R<sub>total</sub> = {CHALLENGE_VOLTAGE}/{CHALLENGE_TOTAL_RESISTANCE} = {
+                CHALLENGE_TOTAL_CURRENT
+              }A. Each branch current is V/R: I1 = {CHALLENGE_VOLTAGE}/{CHALLENGE_RESISTANCES[0]} = {
+                CHALLENGE_BRANCH_CURRENTS[0]
+              }A, I2 = {CHALLENGE_VOLTAGE}/{CHALLENGE_RESISTANCES[1]} = {CHALLENGE_BRANCH_CURRENTS[1]}A, I3 = {
+                CHALLENGE_VOLTAGE
+              }/{CHALLENGE_RESISTANCES[2]} = {CHALLENGE_BRANCH_CURRENTS[2]}A — and I1 + I2 + I3 = {
+                CHALLENGE_TOTAL_CURRENT
+              }A, matching the total current above, just as Kirchhoff's current law says it must.
+            </p>
+          </div>
         </div>
       </div>
     </section>
 
     <script>
-      import { parallelResistance, seriesResistance } from "../lib/circuit";
+      import { current, parallelResistance, seriesResistance } from "../lib/circuit";
 
       // A single master volume (0-1) shared by every hum/tone on the page —
       // each sound system below multiplies its own base volume by this
@@ -1177,12 +1547,21 @@ const experimentIsInitialSuccess =
       // highway analogy is the "why" that follows the quiz's "what".
       const highwaySection = document.querySelector<HTMLElement>('[data-testid="highway-analogy"]');
       // Same reasoning: declared up here so the highway Drive button's click
+      // handler (further down) can reveal it — voltage-check is the visual
+      // premise ("both branches share a voltage") that the derivation's
+      // first algebra step then states formally.
+      const voltageCheckSection = document.querySelector<HTMLElement>('[data-testid="voltage-check"]');
+      // Same reasoning: declared up here so the highway Drive button's click
       // handler (further down) can reveal it — the formal derivation is the
       // "how do we know" that follows the highway analogy's intuition.
       const derivationSection = document.querySelector<HTMLElement>('[data-testid="derivation"]');
       // Revealed by the same Drive click, right alongside the derivation —
       // "here's the proof" and "now go play with it" land at the same time.
       const experimentSection = document.querySelector<HTMLElement>('[data-testid="experiment"]');
+      // Same reveal moment as the rest — the capstone challenge only makes
+      // sense once the visitor has seen the voltage/derivation/experiment
+      // sections it draws on.
+      const challengeSection = document.querySelector<HTMLElement>('[data-testid="challenge"]');
 
       if (quizIncreaseBtn && quizDecreaseBtn && quizFeedback && quizFeedbackVerdict) {
         function answerQuiz(guess: "increase" | "decrease") {
@@ -1285,6 +1664,36 @@ const experimentIsInitialSuccess =
         });
       }
 
+      // Voltage-check sliders: fixed at exactly two branches (unlike the
+      // experiment below), so a slider drag only ever patches that one
+      // branch's own label and ammeter reading — no rebuild needed. The
+      // voltmeter readings are never touched: they're the whole point, and
+      // stay locked to VOLTAGE no matter what the sliders do.
+      const VOLTAGE_CHECK_VOLTAGE = 12;
+
+      [1, 2].forEach((n) => {
+        const slider = document.querySelector<HTMLInputElement>(
+          `[data-testid="voltage-check-resistor-${n}-slider"]`,
+        );
+        const valueLabel = document.querySelector<HTMLElement>(
+          `[data-testid="voltage-check-resistor-${n}-value"]`,
+        );
+        const branchLabel = document.querySelector<SVGTextElement>(
+          `[data-testid="voltage-check-resistor-${n}-label"]`,
+        );
+        const currentReadout = document.querySelector<HTMLElement>(
+          `[data-testid="voltage-check-current-readout-${n}"] .voltage-check-current-value`,
+        );
+
+        slider?.addEventListener("input", () => {
+          const value = Number(slider.value);
+          const amps = current(VOLTAGE_CHECK_VOLTAGE, value).toFixed(2);
+          if (valueLabel) valueLabel.textContent = `${value} Ω`;
+          if (branchLabel) branchLabel.textContent = `R${n}: ${value}Ω`;
+          if (currentReadout) currentReadout.textContent = `${amps}A`;
+        });
+      });
+
       // Resistor experiment: unlike every board above, the resistor count
       // here is adjustable, so its SVG branches and slider rows are rebuilt
       // from a plain `values` array whenever one is added or removed — the
@@ -1306,6 +1715,7 @@ const experimentIsInitialSuccess =
         '[data-testid="experiment-add-resistor"]',
       );
       const experimentTotal = document.querySelector<HTMLElement>('[data-testid="experiment-total"]');
+      const experimentCurrents = document.querySelector<HTMLElement>('[data-testid="experiment-currents"]');
 
       if (
         experimentCircuit &&
@@ -1314,7 +1724,8 @@ const experimentIsInitialSuccess =
         experimentFlowGroup &&
         experimentRows &&
         experimentAddBtn &&
-        experimentTotal
+        experimentTotal &&
+        experimentCurrents
       ) {
         const EXP_VIEWBOX_WIDTH = 460;
         const EXP_LEFT_X = 130;
@@ -1324,10 +1735,10 @@ const experimentIsInitialSuccess =
         const EXP_MIN_RESISTORS = 1;
         const EXP_MAX_RESISTORS = 20;
         const EXP_VOLTAGE = 12;
-        const EXP_TARGET_OHMS = 4;
-        const EXP_SUCCESS_EPSILON = 1e-9;
+        const EXP_TARGET_OHMS = 7;
+        const EXP_SUCCESS_EPSILON = 0.05;
 
-        let values = [10, 10];
+        let values = [10, 10, 10];
 
         function expBranchYsFor(n: number): number[] {
           return Array.from({ length: n }, (_, i) => EXP_BUS_TOP_Y + i * EXP_BRANCH_SPACING);
@@ -1411,6 +1822,16 @@ const experimentIsInitialSuccess =
           `;
         }
 
+        function experimentCurrentMarkup(value: number, i: number): string {
+          const amps = current(EXP_VOLTAGE, value).toFixed(2);
+          return `
+            <p class="experiment-current" data-testid="experiment-current-readout-${i + 1}">
+              <span class="experiment-current-label">I${i + 1}:</span>
+              <span class="experiment-current-value">${amps}A</span>
+            </p>
+          `;
+        }
+
         function attachExperimentRowListeners() {
           values.forEach((_, i) => {
             const slider = document.querySelector<HTMLInputElement>(
@@ -1422,6 +1843,9 @@ const experimentIsInitialSuccess =
             const branchLabel = document.querySelector<SVGTextElement>(
               `[data-testid="experiment-resistor-${i + 1}-label"]`,
             );
+            const currentValue = document.querySelector<HTMLElement>(
+              `[data-testid="experiment-current-readout-${i + 1}"] .experiment-current-value`,
+            );
             const removeBtn = document.querySelector<HTMLButtonElement>(
               `[data-testid="experiment-resistor-${i + 1}-remove"]`,
             );
@@ -1431,6 +1855,7 @@ const experimentIsInitialSuccess =
               values[i] = value;
               if (valueLabel) valueLabel.textContent = `${value} Ω`;
               if (branchLabel) branchLabel.textContent = `R${i + 1}: ${value}Ω`;
+              if (currentValue) currentValue.textContent = `${current(EXP_VOLTAGE, value).toFixed(2)}A`;
               updateExperimentTotal();
             });
 
@@ -1451,6 +1876,7 @@ const experimentIsInitialSuccess =
             .join("");
           experimentFlowGroup!.innerHTML = experimentFlowMarkup(layout);
           experimentRows!.innerHTML = values.map((value, i) => experimentRowMarkup(value, i, values.length)).join("");
+          experimentCurrents!.innerHTML = values.map((value, i) => experimentCurrentMarkup(value, i)).join("");
           attachExperimentRowListeners();
           experimentAddBtn!.disabled = values.length >= EXP_MAX_RESISTORS;
           updateExperimentTotal();
@@ -1462,6 +1888,58 @@ const experimentIsInitialSuccess =
           if (values.length >= EXP_MAX_RESISTORS) return;
           values.push(10);
           renderExperiment();
+        });
+      }
+
+      const challengeCheckBtn = document.querySelector<HTMLButtonElement>('[data-testid="challenge-check"]');
+      const challengeFeedback = document.querySelector<HTMLElement>('[data-testid="challenge-feedback"]');
+      const challengeFeedbackVerdict = document.querySelector<HTMLElement>(
+        '[data-testid="challenge-feedback-verdict"]',
+      );
+
+      if (challengeCheckBtn && challengeFeedback && challengeFeedbackVerdict) {
+        // Kept in sync with CHALLENGE_RESISTANCES/CHALLENGE_VOLTAGE in the
+        // frontmatter above — only the raw inputs are duplicated (as every
+        // other section on this page does for its client script), the
+        // correct-answer values themselves are computed here from the same
+        // circuit.ts functions the frontmatter used, not hand-copied.
+        const CHALLENGE_RESISTANCES = [6, 12, 4];
+        const CHALLENGE_VOLTAGE = 12;
+        const CHALLENGE_ANSWER_EPSILON = 0.05;
+
+        const correctTotalResistance = parallelResistance(CHALLENGE_RESISTANCES);
+        const correctTotalCurrent = current(CHALLENGE_VOLTAGE, correctTotalResistance);
+        const correctBranchCurrents = CHALLENGE_RESISTANCES.map((r) => current(CHALLENGE_VOLTAGE, r));
+
+        const challengeFields = [
+          { testid: "total-resistance", correct: correctTotalResistance },
+          { testid: "total-current", correct: correctTotalCurrent },
+          ...correctBranchCurrents.map((correct, i) => ({ testid: `i${i + 1}`, correct })),
+        ];
+
+        challengeCheckBtn.addEventListener("click", () => {
+          let correctCount = 0;
+
+          for (const field of challengeFields) {
+            const input = document.querySelector<HTMLInputElement>(
+              `[data-testid="challenge-input-${field.testid}"]`,
+            );
+            const mark = document.querySelector<HTMLElement>(`[data-testid="challenge-mark-${field.testid}"]`);
+            if (!input || !mark) continue;
+
+            const isCorrect = Math.abs(Number(input.value) - field.correct) < CHALLENGE_ANSWER_EPSILON;
+            if (isCorrect) correctCount++;
+            mark.textContent = isCorrect ? "✓" : "✗";
+            mark.classList.toggle("challenge-answer-mark-correct", isCorrect);
+            mark.classList.toggle("challenge-answer-mark-incorrect", !isCorrect);
+          }
+
+          challengeFeedbackVerdict.textContent =
+            correctCount === challengeFields.length
+              ? `All ${challengeFields.length} correct!`
+              : `${correctCount} of ${challengeFields.length} correct — check the marks above, then read the worked solution below.`;
+          challengeFeedback.dataset.allCorrect = String(correctCount === challengeFields.length);
+          challengeFeedback.removeAttribute("hidden");
         });
       }
 
@@ -1777,9 +2255,11 @@ const experimentIsInitialSuccess =
         highwayDriveBtn.addEventListener("click", () => {
           if (hwSoundEnabled) unlockHwAudio();
           driveHighway();
+          voltageCheckSection?.removeAttribute("hidden");
           derivationSection?.removeAttribute("hidden");
           derivationHumRefresh?.();
           experimentSection?.removeAttribute("hidden");
+          challengeSection?.removeAttribute("hidden");
         });
 
         highwaySoundToggle.addEventListener("click", () => {
