@@ -759,9 +759,13 @@ textarea {
     padding: 1.5rem;
   }
 
+  /* Below this width the header is narrow enough that a fixed corner
+     widget overlaps body text as the page scrolls (confirmed by screenshotting
+     the live site at 390x844), so it drops out of fixed positioning and sits
+     in normal flow instead, right after the intro paragraph. */
   .sound-volume {
-    top: 0.5rem;
-    right: 0.5rem;
+    position: static;
+    margin-top: 1rem;
     padding: 0.4rem 0.6rem;
     font-size: 0.7rem;
   }
