@@ -37,7 +37,6 @@ describe("index.astro: frontmatter/script constant duplication stays in sync", (
   const pairs: Array<[string, string, string]> = [
     ["voltage", "VOLTAGE", "VOLTAGE_CHECK_VOLTAGE"],
     ["voltage", "VOLTAGE", "EXP_VOLTAGE"],
-    ["voltage", "VOLTAGE", "CHALLENGE_VOLTAGE"],
     ["experiment viewbox width", "EXPERIMENT_VIEWBOX_WIDTH", "EXP_VIEWBOX_WIDTH"],
     ["experiment left x", "EXPERIMENT_LEFT_X", "EXP_LEFT_X"],
     ["experiment right x", "EXPERIMENT_RIGHT_X", "EXP_RIGHT_X"],
@@ -57,9 +56,5 @@ describe("index.astro: frontmatter/script constant duplication stays in sync", (
 
   it("experiment default values: frontmatter's EXPERIMENT_DEFAULT_VALUES matches script's initial `values`", () => {
     expect(literalIn(script, "values")).toEqual(literalIn(frontmatter, "EXPERIMENT_DEFAULT_VALUES"));
-  });
-
-  it("challenge resistances: frontmatter's CHALLENGE_RESISTANCES matches script's CHALLENGE_RESISTANCES", () => {
-    expect(literalIn(script, "CHALLENGE_RESISTANCES")).toEqual(literalIn(frontmatter, "CHALLENGE_RESISTANCES"));
   });
 });

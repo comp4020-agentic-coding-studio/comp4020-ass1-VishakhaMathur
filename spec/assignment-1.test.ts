@@ -100,10 +100,9 @@ describe("highway analogy: hooks exist", () => {
     ? new JSDOM(readFileSync(distPath, "utf8")).window.document
     : null;
 
-  it("exposes the section, drive button, and sound toggle", () => {
+  it("exposes the section and drive button", () => {
     expect(doc?.querySelector('[data-testid="highway-analogy"]'), NEXT_STEP).toBeTruthy();
     expect(doc?.querySelector('[data-testid="highway-drive"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="highway-sound-toggle"]'), NEXT_STEP).toBeTruthy();
   });
 
   it("exposes the series board with its car and two bumps", () => {
@@ -208,14 +207,11 @@ describe("resistance derivation: hooks exist", () => {
     expect(step?.textContent).toContain("2");
   });
 
-  it("exposes its own sound toggle for the current-flow hum", () => {
-    expect(doc?.querySelector('[data-testid="derivation-sound-toggle"]'), NEXT_STEP).toBeTruthy();
-  });
 });
 
-// A single master volume slider (Header slot, so it's above every section)
-// that scales the Check-your-understanding, highway, and derivation hums
-// together — structural hook only, same reasoning as above.
+// The master volume slider (Header slot, so it's above every section) that
+// scales the Check-your-understanding hum — structural hook only, same
+// reasoning as above.
 describe("master volume slider: hook exists", () => {
   const distPath = resolve("dist/index.html");
   const doc = existsSync(distPath)
@@ -273,44 +269,6 @@ describe("resistor experiment: hooks exist", () => {
       expect(readout, NEXT_STEP).toBeTruthy();
       expect(readout?.textContent).toContain(`I${n}:`);
     }
-  });
-});
-
-// These hooks only check the built page's fixed challenge circuit and its
-// answer-checking UI structure; typing into the inputs and clicking "Check
-// my answers" is exercised manually, same reasoning as every other slider
-// section above (jsdom cannot reliably drive synthetic input/click events).
-describe("resistor challenge: hooks exist", () => {
-  const distPath = resolve("dist/index.html");
-  const doc = existsSync(distPath)
-    ? new JSDOM(readFileSync(distPath, "utf8")).window.document
-    : null;
-
-  it("exposes the section, board, and controls panel", () => {
-    expect(doc?.querySelector('[data-testid="challenge"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="challenge-board"]'), NEXT_STEP).toBeTruthy();
-    expect(doc?.querySelector('[data-testid="challenge-controls"]'), NEXT_STEP).toBeTruthy();
-  });
-
-  it("draws all three fixed branch resistors on the circuit diagram", () => {
-    for (const n of [1, 2, 3]) {
-      expect(doc?.querySelector(`[data-testid="challenge-resistor-${n}"]`), NEXT_STEP).toBeTruthy();
-    }
-  });
-
-  it("exposes an answer input and a hidden result mark for total resistance, total current, and each branch current", () => {
-    for (const testid of ["total-resistance", "total-current", "i1", "i2", "i3"]) {
-      expect(doc?.querySelector(`[data-testid="challenge-input-${testid}"]`), NEXT_STEP).toBeTruthy();
-      expect(doc?.querySelector(`[data-testid="challenge-mark-${testid}"]`), NEXT_STEP).toBeTruthy();
-    }
-  });
-
-  it("exposes a check-answers button and a feedback callout that starts hidden", () => {
-    expect(doc?.querySelector('[data-testid="challenge-check"]'), NEXT_STEP).toBeTruthy();
-    const feedback = doc?.querySelector('[data-testid="challenge-feedback"]');
-    expect(feedback, NEXT_STEP).toBeTruthy();
-    expect((feedback as HTMLElement | undefined)?.hidden).toBe(true);
-    expect(doc?.querySelector('[data-testid="challenge-feedback-verdict"]'), NEXT_STEP).toBeTruthy();
   });
 });
 

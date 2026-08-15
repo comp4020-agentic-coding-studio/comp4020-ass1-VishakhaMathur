@@ -122,25 +122,6 @@ const EXPERIMENT_TARGET_OHMS = 7;
 const EXPERIMENT_SUCCESS_EPSILON = 0.05;
 const experimentIsInitialSuccess =
   Math.abs(experimentInitialTotal - EXPERIMENT_TARGET_OHMS) < EXPERIMENT_SUCCESS_EPSILON;
-
-// The final challenge: a fixed (not adjustable) three-resistor board, reusing
-// the experiment board's geometry helper since three branches is exactly what
-// it already lays out. Values are chosen so every answer — Rtotal, Itotal,
-// and each branch current — is a clean one-decimal number, so a visitor's
-// typed answer can be checked against the same epsilon used above without
-// the "6.98 reads as 7.0" ambiguity that motivated EXPERIMENT_SUCCESS_EPSILON.
-const CHALLENGE_RESISTANCES = [6, 12, 4];
-const CHALLENGE_VOLTAGE = VOLTAGE;
-const challengeLayout = experimentLayoutFor(CHALLENGE_RESISTANCES.length);
-const challengeFlowSegments = [
-  { x1: EXPERIMENT_LEFT_X, y1: challengeLayout.entryY, x2: EXPERIMENT_LEFT_X, y2: EXPERIMENT_BUS_TOP_Y },
-  ...challengeLayout.branchYs.map((y) => ({ x1: EXPERIMENT_LEFT_X, y1: y, x2: EXPERIMENT_RIGHT_X, y2: y })),
-  { x1: EXPERIMENT_RIGHT_X, y1: EXPERIMENT_BUS_TOP_Y, x2: EXPERIMENT_RIGHT_X, y2: challengeLayout.returnY },
-  { x1: EXPERIMENT_RIGHT_X, y1: challengeLayout.returnY, x2: EXPERIMENT_LEFT_X, y2: challengeLayout.returnY },
-];
-const CHALLENGE_TOTAL_RESISTANCE = parallelResistance(CHALLENGE_RESISTANCES);
-const CHALLENGE_TOTAL_CURRENT = current(CHALLENGE_VOLTAGE, CHALLENGE_TOTAL_RESISTANCE);
-const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALLENGE_VOLTAGE, r));
 ---
 
 <!doctype html>
@@ -166,10 +147,8 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
         of points — every resistor's leads land on the same two terminals as every other resistor in
         the group, so current gets more than one path to choose from.
       </p>
-      {/* One master volume for every hum/tone below (Check your
-          understanding, the highway analogy, the derivation) rather than a
-          slider per section — it's the same "current flowing" sound
-          language throughout, so one control covers all of it. */}
+      {/* Controls the "current is flowing" hum in Check your understanding —
+          the only section with sound. */}
       <div class="sound-volume" data-testid="sound-volume-control">
         <label for="sound-volume-slider">Sound volume</label>
         <input type="range" id="sound-volume-slider" data-testid="sound-volume-slider" min="0" max="100" value="100" />
@@ -543,14 +522,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
       </div>
       <div class="highway-controls">
         <button type="button" data-testid="highway-drive" class="highway-drive">Drive</button>
-        <button
-          type="button"
-          class="parallel-check-sound-toggle"
-          data-testid="highway-sound-toggle"
-          aria-pressed="true"
-        >
-          Sound: on
-        </button>
       </div>
       <div
         class="callout highway-comparison"
@@ -911,16 +882,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
           </ol>
         </div>
       </div>
-      <div class="derivation-controls">
-        <button
-          type="button"
-          class="parallel-check-sound-toggle"
-          data-testid="derivation-sound-toggle"
-          aria-pressed="true"
-        >
-          Sound: on
-        </button>
-      </div>
     </section>
 
     <section
@@ -1100,209 +1061,20 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
       </div>
     </section>
 
-    <section
-      class="parallel-check challenge"
-      data-testid="challenge"
-      aria-labelledby="challenge-title"
-      {...{ hidden: true }}
-    >
-      <h2 class="parallel-check-title" id="challenge-title">Challenge: work out the currents</h2>
-      <p class="parallel-check-instructions">
-        One more circuit, but this time you do the maths. Three resistors in parallel across a
-        {CHALLENGE_VOLTAGE}V battery. Using what you've learned above — every branch shares the same
-        voltage, Ohm's law gives each branch's current, and the branch currents add up to the total —
-        work out the total resistance, the total current, and the current through each branch. Type
-        your answers in, then check your work.
-      </p>
-      <div class="split-columns">
-        <div class="split-diagram">
-          <div class="parallel-check-board challenge-board" data-testid="challenge-board">
-            <svg
-              class="parallel-check-circuit"
-              data-testid="challenge-circuit"
-              viewBox={`0 0 ${EXPERIMENT_VIEWBOX_WIDTH} ${challengeLayout.viewboxHeight}`}
-              role="img"
-              aria-label="A closed parallel circuit with three resistors across a 12 volt battery"
-            >
-              <g data-testid="challenge-frame">
-                <line
-                  x1={EXPERIMENT_LEFT_X}
-                  y1={EXPERIMENT_BUS_TOP_Y}
-                  x2={EXPERIMENT_LEFT_X}
-                  y2={challengeLayout.entryY}
-                  stroke="#333"
-                  stroke-width="3"
-                />
-                <line
-                  x1={EXPERIMENT_RIGHT_X}
-                  y1={EXPERIMENT_BUS_TOP_Y}
-                  x2={EXPERIMENT_RIGHT_X}
-                  y2={challengeLayout.returnY}
-                  stroke="#333"
-                  stroke-width="3"
-                />
-                <line
-                  x1={EXPERIMENT_LEFT_X}
-                  y1={challengeLayout.returnY}
-                  x2={EXPERIMENT_RIGHT_X}
-                  y2={challengeLayout.returnY}
-                  stroke="#333"
-                  stroke-width="3"
-                />
-                <Battery
-                  x={EXPERIMENT_LEFT_X}
-                  y={challengeLayout.batteryY}
-                  voltage={CHALLENGE_VOLTAGE}
-                  testid="challenge-battery"
-                />
-              </g>
-              <g data-testid="challenge-branches">
-                {challengeLayout.branchYs.map((y, i) => (
-                  <>
-                    <circle cx={EXPERIMENT_LEFT_X} cy={y} r="4" fill="#333" />
-                    <circle cx={EXPERIMENT_RIGHT_X} cy={y} r="4" fill="#333" />
-                    <g data-testid={`challenge-resistor-${i + 1}`}>
-                      <line
-                        x1={EXPERIMENT_LEFT_X}
-                        y1={y}
-                        x2={EXPERIMENT_LEFT_X + 60}
-                        y2={y}
-                        stroke="#333"
-                        stroke-width="3"
-                      />
-                      <rect
-                        x={EXPERIMENT_LEFT_X + 60}
-                        y={y - 14}
-                        width={EXPERIMENT_RIGHT_X - 60 - (EXPERIMENT_LEFT_X + 60)}
-                        height="28"
-                        rx="4"
-                        fill="#fff3cd"
-                        stroke="#e63946"
-                        stroke-width="2"
-                      />
-                      <text
-                        x={(EXPERIMENT_LEFT_X + EXPERIMENT_RIGHT_X) / 2}
-                        y={y + 5}
-                        text-anchor="middle"
-                        font-size="13"
-                        font-weight="600">R{i + 1}: {CHALLENGE_RESISTANCES[i]}Ω</text
-                      >
-                      <line
-                        x1={EXPERIMENT_RIGHT_X - 60}
-                        y1={y}
-                        x2={EXPERIMENT_RIGHT_X}
-                        y2={y}
-                        stroke="#333"
-                        stroke-width="3"
-                      />
-                    </g>
-                  </>
-                ))}
-              </g>
-              <g aria-hidden="true" data-testid="challenge-current-flow">
-                {challengeFlowSegments.map((segment) => (
-                  <line
-                    x1={segment.x1}
-                    y1={segment.y1}
-                    x2={segment.x2}
-                    y2={segment.y2}
-                    class="current-flow-line challenge-flow-line"
-                  />
-                ))}
-              </g>
-            </svg>
-          </div>
-        </div>
-        <div class="experiment-controls challenge-controls" data-testid="challenge-controls">
-          <div class="challenge-answer-rows">
-            <div class="challenge-answer-row" data-testid="challenge-answer-total-resistance">
-              <label for="challenge-input-total-resistance">Total resistance (Ω)</label>
-              <input
-                type="number"
-                step="any"
-                id="challenge-input-total-resistance"
-                data-testid="challenge-input-total-resistance"
-              />
-              <span
-                class="challenge-answer-mark"
-                data-testid="challenge-mark-total-resistance"
-                aria-hidden="true"
-              ></span>
-            </div>
-            <div class="challenge-answer-row" data-testid="challenge-answer-total-current">
-              <label for="challenge-input-total-current">Total current (A)</label>
-              <input
-                type="number"
-                step="any"
-                id="challenge-input-total-current"
-                data-testid="challenge-input-total-current"
-              />
-              <span class="challenge-answer-mark" data-testid="challenge-mark-total-current" aria-hidden="true"
-              ></span>
-            </div>
-            {CHALLENGE_RESISTANCES.map((_, i) => (
-              <div class="challenge-answer-row" data-testid={`challenge-answer-i${i + 1}`}>
-                <label for={`challenge-input-i${i + 1}`}>I{i + 1} (A)</label>
-                <input
-                  type="number"
-                  step="any"
-                  id={`challenge-input-i${i + 1}`}
-                  data-testid={`challenge-input-i${i + 1}`}
-                />
-                <span class="challenge-answer-mark" data-testid={`challenge-mark-i${i + 1}`} aria-hidden="true"
-                ></span>
-              </div>
-            ))}
-          </div>
-          <button type="button" class="challenge-check" data-testid="challenge-check">Check my answers</button>
-          <div
-            class="callout challenge-feedback"
-            data-testid="challenge-feedback"
-            aria-live="polite"
-            {...{ hidden: true }}
-          >
-            <p>
-              <strong data-testid="challenge-feedback-verdict"></strong>
-            </p>
-            <p>
-              Worked solution: every branch shares {CHALLENGE_VOLTAGE}V, so 1/R<sub>total</sub> = 1/{
-                CHALLENGE_RESISTANCES[0]
-              } + 1/{CHALLENGE_RESISTANCES[1]} + 1/{CHALLENGE_RESISTANCES[2]}, giving R<sub>total</sub> = {
-                CHALLENGE_TOTAL_RESISTANCE
-              }Ω. Total current I = V/R<sub>total</sub> = {CHALLENGE_VOLTAGE}/{CHALLENGE_TOTAL_RESISTANCE} = {
-                CHALLENGE_TOTAL_CURRENT
-              }A. Each branch current is V/R: I1 = {CHALLENGE_VOLTAGE}/{CHALLENGE_RESISTANCES[0]} = {
-                CHALLENGE_BRANCH_CURRENTS[0]
-              }A, I2 = {CHALLENGE_VOLTAGE}/{CHALLENGE_RESISTANCES[1]} = {CHALLENGE_BRANCH_CURRENTS[1]}A, I3 = {
-                CHALLENGE_VOLTAGE
-              }/{CHALLENGE_RESISTANCES[2]} = {CHALLENGE_BRANCH_CURRENTS[2]}A — and I1 + I2 + I3 = {
-                CHALLENGE_TOTAL_CURRENT
-              }A, matching the total current above, just as Kirchhoff's current law says it must.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <script>
       import { current, parallelResistance, seriesResistance } from "../lib/circuit";
 
-      // A single master volume (0-1) shared by every hum/tone on the page —
-      // each sound system below multiplies its own base volume by this
-      // before ramping a gain node. The refresh hooks let the slider retune
-      // whichever hums are currently playing, instead of only taking effect
-      // the next time a hum happens to restart.
+      // Master volume (0-1) for the Check-your-understanding hum — the only
+      // sound left on the page. The refresh hook lets the slider retune the
+      // hum while it's already playing, instead of only taking effect the
+      // next time it restarts.
       let masterVolume = 1;
       let checkHumRefresh: (() => void) | null = null;
-      let derivationHumRefresh: (() => void) | null = null;
-      let highwayHumRefresh: (() => void) | null = null;
 
       const volumeSlider = document.querySelector<HTMLInputElement>('[data-testid="sound-volume-slider"]');
       volumeSlider?.addEventListener("input", () => {
         masterVolume = Number(volumeSlider.value) / 100;
         checkHumRefresh?.();
-        derivationHumRefresh?.();
-        highwayHumRefresh?.();
       });
 
       // A comprehension check for the "same two points" definition of
@@ -1558,10 +1330,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
       // Revealed by the same Drive click, right alongside the derivation —
       // "here's the proof" and "now go play with it" land at the same time.
       const experimentSection = document.querySelector<HTMLElement>('[data-testid="experiment"]');
-      // Same reveal moment as the rest — the capstone challenge only makes
-      // sense once the visitor has seen the voltage/derivation/experiment
-      // sections it draws on.
-      const challengeSection = document.querySelector<HTMLElement>('[data-testid="challenge"]');
 
       if (quizIncreaseBtn && quizDecreaseBtn && quizFeedback && quizFeedbackVerdict) {
         function answerQuiz(guess: "increase" | "decrease") {
@@ -1578,90 +1346,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
 
         quizIncreaseBtn.addEventListener("click", () => answerQuiz("increase"));
         quizDecreaseBtn.addEventListener("click", () => answerQuiz("decrease"));
-      }
-
-      // Derivation section: the same "current is flowing" hum as Check your
-      // understanding — this circuit is always closed once revealed (no
-      // drag interaction to solve), so it just needs its own sound toggle
-      // plus the same auto-pause-when-scrolled-out-of-view behaviour as the
-      // section above.
-      const derivationSoundToggle = document.querySelector<HTMLButtonElement>(
-        '[data-testid="derivation-sound-toggle"]',
-      );
-
-      if (derivationSection && derivationSoundToggle) {
-        let derivationSoundEnabled = true;
-        let derivationAudioCtx: AudioContext | null = null;
-        let derivationHumGain: GainNode | null = null;
-        let derivationSectionVisible = true;
-        const DERIVATION_HUM_VOLUME = 0.2;
-        const DERIVATION_HUM_RAMP_SECONDS = 0.25;
-
-        function ensureDerivationAudio() {
-          if (derivationAudioCtx) return;
-          const AudioContextCtor =
-            window.AudioContext ??
-            (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-          if (!AudioContextCtor) return;
-          derivationAudioCtx = new AudioContextCtor();
-          const oscillator = derivationAudioCtx.createOscillator();
-          oscillator.type = "sawtooth";
-          oscillator.frequency.value = 180;
-          derivationHumGain = derivationAudioCtx.createGain();
-          derivationHumGain.gain.value = 0;
-          oscillator.connect(derivationHumGain).connect(derivationAudioCtx.destination);
-          oscillator.start();
-        }
-
-        // Unlocked from the highway section's Drive click (the gesture that
-        // reveals this section), same reasoning as unlockAudio/unlockHwAudio
-        // above — an AudioContext can only start producing sound once
-        // resumed inside a trusted user gesture.
-        function unlockDerivationAudio() {
-          ensureDerivationAudio();
-          if (derivationAudioCtx?.state === "suspended") void derivationAudioCtx.resume();
-        }
-
-        function refreshDerivationHum() {
-          if (!derivationSoundEnabled) return;
-          unlockDerivationAudio();
-          if (!derivationAudioCtx || !derivationHumGain) return;
-          const running = !derivationSection!.hidden && derivationSectionVisible;
-          const target = running ? DERIVATION_HUM_VOLUME * masterVolume : 0;
-          derivationHumGain.gain.linearRampToValueAtTime(
-            target,
-            derivationAudioCtx.currentTime + DERIVATION_HUM_RAMP_SECONDS,
-          );
-        }
-        derivationHumRefresh = refreshDerivationHum;
-
-        // `isIntersecting` stays true for any nonzero overlap no matter what
-        // threshold is passed, so a one-pixel sliver of this section left at
-        // the top of the viewport would otherwise keep the hum playing once
-        // the visitor has scrolled on to the experiment section below it.
-        // Checking intersectionRatio directly against a real threshold means
-        // the hum stops once this section is mostly scrolled past.
-        new IntersectionObserver(
-          ([entry]) => {
-            derivationSectionVisible = entry.intersectionRatio >= 0.4;
-            refreshDerivationHum();
-          },
-          { threshold: [0, 0.25, 0.4, 0.5, 0.75, 1] },
-        ).observe(derivationSection);
-
-        derivationSoundToggle.addEventListener("click", () => {
-          derivationSoundEnabled = !derivationSoundEnabled;
-          derivationSoundToggle.textContent = `Sound: ${derivationSoundEnabled ? "on" : "off"}`;
-          derivationSoundToggle.setAttribute("aria-pressed", String(derivationSoundEnabled));
-          if (derivationSoundEnabled) {
-            refreshDerivationHum();
-          } else if (derivationHumGain && derivationAudioCtx) {
-            derivationHumGain.gain.linearRampToValueAtTime(
-              0,
-              derivationAudioCtx.currentTime + DERIVATION_HUM_RAMP_SECONDS,
-            );
-          }
-        });
       }
 
       // Voltage-check sliders: fixed at exactly two branches (unlike the
@@ -1891,58 +1575,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
         });
       }
 
-      const challengeCheckBtn = document.querySelector<HTMLButtonElement>('[data-testid="challenge-check"]');
-      const challengeFeedback = document.querySelector<HTMLElement>('[data-testid="challenge-feedback"]');
-      const challengeFeedbackVerdict = document.querySelector<HTMLElement>(
-        '[data-testid="challenge-feedback-verdict"]',
-      );
-
-      if (challengeCheckBtn && challengeFeedback && challengeFeedbackVerdict) {
-        // Kept in sync with CHALLENGE_RESISTANCES/CHALLENGE_VOLTAGE in the
-        // frontmatter above — only the raw inputs are duplicated (as every
-        // other section on this page does for its client script), the
-        // correct-answer values themselves are computed here from the same
-        // circuit.ts functions the frontmatter used, not hand-copied.
-        const CHALLENGE_RESISTANCES = [6, 12, 4];
-        const CHALLENGE_VOLTAGE = 12;
-        const CHALLENGE_ANSWER_EPSILON = 0.05;
-
-        const correctTotalResistance = parallelResistance(CHALLENGE_RESISTANCES);
-        const correctTotalCurrent = current(CHALLENGE_VOLTAGE, correctTotalResistance);
-        const correctBranchCurrents = CHALLENGE_RESISTANCES.map((r) => current(CHALLENGE_VOLTAGE, r));
-
-        const challengeFields = [
-          { testid: "total-resistance", correct: correctTotalResistance },
-          { testid: "total-current", correct: correctTotalCurrent },
-          ...correctBranchCurrents.map((correct, i) => ({ testid: `i${i + 1}`, correct })),
-        ];
-
-        challengeCheckBtn.addEventListener("click", () => {
-          let correctCount = 0;
-
-          for (const field of challengeFields) {
-            const input = document.querySelector<HTMLInputElement>(
-              `[data-testid="challenge-input-${field.testid}"]`,
-            );
-            const mark = document.querySelector<HTMLElement>(`[data-testid="challenge-mark-${field.testid}"]`);
-            if (!input || !mark) continue;
-
-            const isCorrect = Math.abs(Number(input.value) - field.correct) < CHALLENGE_ANSWER_EPSILON;
-            if (isCorrect) correctCount++;
-            mark.textContent = isCorrect ? "✓" : "✗";
-            mark.classList.toggle("challenge-answer-mark-correct", isCorrect);
-            mark.classList.toggle("challenge-answer-mark-incorrect", !isCorrect);
-          }
-
-          challengeFeedbackVerdict.textContent =
-            correctCount === challengeFields.length
-              ? `All ${challengeFields.length} correct!`
-              : `${correctCount} of ${challengeFields.length} correct — check the marks above, then read the worked solution below.`;
-          challengeFeedback.dataset.allCorrect = String(correctCount === challengeFields.length);
-          challengeFeedback.removeAttribute("hidden");
-        });
-      }
-
       // The highway analogy: a speed bump slows a car the way a resistor
       // impedes current. One "Drive" button races all three cars at once —
       // the series car against both parallel cars — so the visitor sees
@@ -1950,9 +1582,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
       // does. Car position is driven frame-by-frame (not a CSS transition)
       // because speed needs to visibly dip near each bump.
       const highwayDriveBtn = document.querySelector<HTMLButtonElement>('[data-testid="highway-drive"]');
-      const highwaySoundToggle = document.querySelector<HTMLButtonElement>(
-        '[data-testid="highway-sound-toggle"]',
-      );
       const highwayComparison = document.querySelector<HTMLElement>('[data-testid="highway-comparison"]');
       const highwayComparisonText = document.querySelector<HTMLElement>(
         '[data-testid="highway-comparison-text"]',
@@ -1964,7 +1593,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
       if (
         highwaySection &&
         highwayDriveBtn &&
-        highwaySoundToggle &&
         highwayComparison &&
         highwayComparisonText &&
         highwaySeriesCar &&
@@ -1995,9 +1623,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
         // just zipping past.
         const HW_RUN_SECONDS_NO_BUMPS = 2.5;
         const HW_BASE_SPEED = (HW_FINISH_X - HW_START_X) / HW_RUN_SECONDS_NO_BUMPS;
-        const HW_LOW_FREQ = 70;
-        const HW_HIGH_FREQ = 160;
-        const HW_HUM_VOLUME = 0.12;
         const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         function hwPct(x: number) {
@@ -2043,9 +1668,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
           x: number;
           elapsed: number;
           finished: boolean;
-          crossed: Set<number>;
-          oscillator: OscillatorNode | null;
-          gain: GainNode | null;
         }
 
         function makeCarState(el: HTMLElement, bumps: number[], baseY: number): HighwayCarState {
@@ -2056,9 +1678,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
             x: HW_START_X,
             elapsed: 0,
             finished: false,
-            crossed: new Set(),
-            oscillator: null,
-            gain: null,
           };
         }
 
@@ -2069,83 +1688,11 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
         ];
         const [seriesCar, parallelCar1, parallelCar2] = cars;
 
-        // Same Web Audio idiom as the parallel-check hum above (lazy
-        // AudioContext, unlocked on a user gesture, gain ramps instead of
-        // clicky start/stop) but its own context: an engine hum per car
-        // whose pitch tracks that car's speed, plus a one-shot "thump" the
-        // instant a car crosses a bump's centre.
-        let hwAudioCtx: AudioContext | null = null;
-        let hwSoundEnabled = true;
-
-        function ensureHwAudio() {
-          if (hwAudioCtx) return;
-          const AudioContextCtor =
-            window.AudioContext ??
-            (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-          if (!AudioContextCtor) return;
-          hwAudioCtx = new AudioContextCtor();
-        }
-
-        function unlockHwAudio() {
-          ensureHwAudio();
-          if (hwAudioCtx?.state === "suspended") void hwAudioCtx.resume();
-        }
-
-        function startCarHum(car: HighwayCarState) {
-          if (!hwAudioCtx || !hwSoundEnabled) return;
-          const oscillator = hwAudioCtx.createOscillator();
-          oscillator.type = "triangle";
-          oscillator.frequency.value = HW_HIGH_FREQ;
-          const gain = hwAudioCtx.createGain();
-          gain.gain.value = 0;
-          oscillator.connect(gain).connect(hwAudioCtx.destination);
-          oscillator.start();
-          gain.gain.linearRampToValueAtTime(HW_HUM_VOLUME * masterVolume, hwAudioCtx.currentTime + 0.15);
-          car.oscillator = oscillator;
-          car.gain = gain;
-        }
-
-        function stopCarHum(car: HighwayCarState) {
-          if (!hwAudioCtx || !car.oscillator || !car.gain) return;
-          const oscillator = car.oscillator;
-          const gain = car.gain;
-          gain.gain.linearRampToValueAtTime(0, hwAudioCtx.currentTime + 0.2);
-          setTimeout(() => oscillator.stop(), 300);
-          car.oscillator = null;
-          car.gain = null;
-        }
-
-        // Lets the master volume slider retune cars that are already
-        // driving, not just the next drive that starts.
-        function refreshHighwayVolume() {
-          if (!hwAudioCtx) return;
-          for (const car of cars) {
-            car.gain?.gain.setTargetAtTime(HW_HUM_VOLUME * masterVolume, hwAudioCtx.currentTime, 0.05);
-          }
-        }
-        highwayHumRefresh = refreshHighwayVolume;
-
-        function playBumpThump() {
-          if (!hwAudioCtx || !hwSoundEnabled) return;
-          const oscillator = hwAudioCtx.createOscillator();
-          oscillator.type = "sine";
-          oscillator.frequency.value = 90;
-          const gain = hwAudioCtx.createGain();
-          gain.gain.value = 0;
-          oscillator.connect(gain).connect(hwAudioCtx.destination);
-          oscillator.start();
-          const now = hwAudioCtx.currentTime;
-          gain.gain.linearRampToValueAtTime(0.4 * masterVolume, now + 0.02);
-          gain.gain.linearRampToValueAtTime(0, now + 0.18);
-          oscillator.stop(now + 0.2);
-        }
-
         function resetCars() {
           for (const car of cars) {
             car.x = HW_START_X;
             car.elapsed = 0;
             car.finished = false;
-            car.crossed.clear();
             car.el.style.left = hwPct(HW_START_X);
             car.el.style.top = hwPctY(car.baseY);
           }
@@ -2175,10 +1722,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
           highwayDriveBtn!.disabled = true;
           highwayDriveBtn!.textContent = "Driving…";
           resetCars();
-          if (hwSoundEnabled) {
-            unlockHwAudio();
-            for (const car of cars) startCarHum(car);
-          }
 
           if (reduceMotion) {
             // No animation frames — jump straight to a result derived from
@@ -2192,7 +1735,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
             parallelCar2.elapsed = parallelOhms * SECONDS_PER_OHM;
             for (const car of cars) {
               car.el.style.left = hwPct(HW_FINISH_X);
-              stopCarHum(car);
             }
             showComparison();
             hwAnimating = false;
@@ -2210,7 +1752,6 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
 
             for (const car of cars) {
               if (car.finished) continue;
-              const previousX = car.x;
               const factor = speedFactor(car.x, car.bumps);
               car.x = Math.min(HW_FINISH_X, car.x + HW_BASE_SPEED * factor * dt);
               car.elapsed += dt;
@@ -2220,21 +1761,8 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
               // it read as driving *over* the bump, not past it.
               car.el.style.top = hwPctY(car.baseY - bumpRise(car.x, car.bumps));
 
-              for (const bumpX of car.bumps) {
-                if (!car.crossed.has(bumpX) && previousX < bumpX && car.x >= bumpX) {
-                  car.crossed.add(bumpX);
-                  playBumpThump();
-                }
-              }
-
-              if (car.gain && car.oscillator && hwAudioCtx) {
-                const targetFreq = HW_LOW_FREQ + (HW_HIGH_FREQ - HW_LOW_FREQ) * factor;
-                car.oscillator.frequency.setTargetAtTime(targetFreq, hwAudioCtx.currentTime, 0.05);
-              }
-
               if (car.x >= HW_FINISH_X) {
                 car.finished = true;
-                stopCarHum(car);
               }
             }
 
@@ -2253,22 +1781,10 @@ const CHALLENGE_BRANCH_CURRENTS = CHALLENGE_RESISTANCES.map((r) => current(CHALL
         }
 
         highwayDriveBtn.addEventListener("click", () => {
-          if (hwSoundEnabled) unlockHwAudio();
           driveHighway();
           voltageCheckSection?.removeAttribute("hidden");
           derivationSection?.removeAttribute("hidden");
-          derivationHumRefresh?.();
           experimentSection?.removeAttribute("hidden");
-          challengeSection?.removeAttribute("hidden");
-        });
-
-        highwaySoundToggle.addEventListener("click", () => {
-          hwSoundEnabled = !hwSoundEnabled;
-          highwaySoundToggle.textContent = `Sound: ${hwSoundEnabled ? "on" : "off"}`;
-          highwaySoundToggle.setAttribute("aria-pressed", String(hwSoundEnabled));
-          if (!hwSoundEnabled) {
-            for (const car of cars) stopCarHum(car);
-          }
         });
       }
     </script>
