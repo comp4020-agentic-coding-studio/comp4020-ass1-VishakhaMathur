@@ -78,3 +78,38 @@ with zero failed network requests), then watched the next CI run go green
 end to end, including the deploy's own "site is online" check.
 ([`36ab389`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-VishakhaMathur/commit/36ab389b94a882ee3199424a8c21ad3313c23945),
 [`86ef72d`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-VishakhaMathur/commit/86ef72d44635b730c242dd5dd7872d721b295930))
+
+**Merging the standalone Review page into the single scrolling page broke an
+accessibility invariant, and the fix wasn't to just delete the nav.** Once
+Review's markup moved into `index.astro`, the old two-page `<nav>` (Home /
+Review) no longer made sense for a page with nowhere left to navigate to, so I
+removed it — which immediately failed
+`spec/invariants.test.ts`'s "has a navigation landmark" check, since every
+built page still needs one. Rather than deciding unilaterally between the
+ways to satisfy that (an in-page section nav, a skip-link, or reinstating a
+trivial nav), I presented the options and let the actual choice — an in-page
+jump-nav to each section's heading — be made deliberately instead of
+guessed at. That nav is what still sits in `Header.astro` today, restyled
+since.
+([`499c7f4`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-VishakhaMathur/commit/499c7f4))
+
+**The section nav linked to all seven sections, but six of them started
+hidden, and clicking ahead just looked broken.** Quiz's feedback aside, the
+sections themselves — Highway, Voltage, Derivation, Experiment, Review — were
+each `hidden` until an earlier step was completed (answering the quiz,
+clicking Highway's Drive button), even though the nav bar advertised all
+seven as jump targets from the moment the page loaded. A fragment link can't
+scroll to a `display: none` target, so clicking "Review" before reaching it
+did nothing visible — no scroll, no error, just a changed URL hash. Once this
+was pointed out, the fix was to remove the initial `hidden` attribute from
+those five sections so the whole page renders from the start, rather than
+inventing a "disable locked links" affordance to paper over a sequencing the
+brief never actually required. That also left behind dead code — the
+quiz-answer and Drive-button handlers that used to un-hide later sections, and
+the section variables that existed only for that — which I removed rather
+than leaving unreachable. I confirmed the fix with `pnpm typecheck` and the
+full `vitest` suite (unchanged, 62 passing), then drove a headless Chromium
+at both a 390×844 phone viewport and a 1440×900 desktop one: no horizontal
+overflow at either size, and clicking the Review link actually scrolls
+`review-title` into view on both.
+([`340ac7a`](https://github.com/comp4020-agentic-coding-studio/comp4020-ass1-VishakhaMathur/commit/340ac7aded31eb8fa6a7ea79403a316be9edfc27))
