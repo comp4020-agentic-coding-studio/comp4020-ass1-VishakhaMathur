@@ -396,7 +396,6 @@ const experimentIsInitialSuccess =
       class="parallel-check highway-analogy"
       data-testid="highway-analogy"
       aria-labelledby="highway-analogy-title"
-      {...{ hidden: true }}
     >
       <h2 class="parallel-check-title" id="highway-analogy-title">Why the total drops: a highway analogy</h2>
       <p class="parallel-check-instructions">
@@ -543,7 +542,6 @@ const experimentIsInitialSuccess =
       class="parallel-check voltage-check"
       data-testid="voltage-check"
       aria-labelledby="voltage-check-title"
-      {...{ hidden: true }}
     >
       <h2 class="parallel-check-title" id="voltage-check-title">Same two points, same voltage</h2>
       <p class="parallel-check-instructions">
@@ -691,7 +689,6 @@ const experimentIsInitialSuccess =
       class="parallel-check derivation"
       data-testid="derivation"
       aria-labelledby="derivation-title"
-      {...{ hidden: true }}
     >
       <h2 class="parallel-check-title" id="derivation-title">Deriving the formula from Ohm's law</h2>
       <p class="parallel-check-instructions">
@@ -896,7 +893,6 @@ const experimentIsInitialSuccess =
       class="parallel-check experiment"
       data-testid="experiment"
       aria-labelledby="experiment-title"
-      {...{ hidden: true }}
     >
       <h2 class="parallel-check-title" id="experiment-title">Try it yourself: adjust the resistors</h2>
       <p class="parallel-check-instructions">
@@ -1086,7 +1082,6 @@ const experimentIsInitialSuccess =
       class="parallel-check review"
       data-testid="review"
       aria-labelledby="review-title"
-      {...{ hidden: true }}
     >
       <h2 class="parallel-check-title" id="review-title" data-testid="review-title">Please leave a review</h2>
       <p class="parallel-check-instructions" data-testid="review-intro">
@@ -1402,29 +1397,11 @@ const experimentIsInitialSuccess =
       const quizFeedbackVerdict = document.querySelector<HTMLElement>(
         '[data-testid="resistance-quiz-feedback-verdict"]',
       );
-      // Declared here (rather than inside the highway block below) so
-      // answerQuiz can reveal it the moment the visitor guesses — the
-      // highway analogy is the "why" that follows the quiz's "what".
       const highwaySection = document.querySelector<HTMLElement>('[data-testid="highway-analogy"]');
-      // Same reasoning: declared up here so the highway Drive button's click
-      // handler (further down) can reveal it — voltage-check is the visual
-      // premise ("both branches share a voltage") that the derivation's
-      // first algebra step then states formally.
-      const voltageCheckSection = document.querySelector<HTMLElement>('[data-testid="voltage-check"]');
-      // Same reasoning: declared up here so the highway Drive button's click
-      // handler (further down) can reveal it — the formal derivation is the
-      // "how do we know" that follows the highway analogy's intuition.
-      const derivationSection = document.querySelector<HTMLElement>('[data-testid="derivation"]');
-      // Revealed by the same Drive click, right alongside the derivation —
-      // "here's the proof" and "now go play with it" land at the same time.
       const experimentSection = document.querySelector<HTMLElement>('[data-testid="experiment"]');
-      // Revealed by the same Drive click, right after the closing note — the
-      // last section on the page.
       const reviewSection = document.querySelector<HTMLElement>('[data-testid="review"]');
-      // The closing note — only shown once the visitor actually reaches the
-      // end of the experiment, not merely once it's unlocked. While
-      // experiment stays hidden this never fires; after the Drive click
-      // unhides it, this fires the first time it scrolls into view.
+      // The closing note — only shown once the visitor actually scrolls to
+      // the end of the experiment, not from page load.
       const pageEndSection = document.querySelector<HTMLElement>('[data-testid="page-end"]');
       if (experimentSection && pageEndSection) {
         const pageEndObserver = new IntersectionObserver(([entry]) => {
@@ -1496,7 +1473,6 @@ const experimentIsInitialSuccess =
           quizFeedback!.removeAttribute("hidden");
           quizIncreaseBtn!.disabled = true;
           quizDecreaseBtn!.disabled = true;
-          highwaySection?.removeAttribute("hidden");
         }
 
         quizIncreaseBtn.addEventListener("click", () => answerQuiz("increase"));
@@ -1937,10 +1913,6 @@ const experimentIsInitialSuccess =
 
         highwayDriveBtn.addEventListener("click", () => {
           driveHighway();
-          voltageCheckSection?.removeAttribute("hidden");
-          derivationSection?.removeAttribute("hidden");
-          experimentSection?.removeAttribute("hidden");
-          reviewSection?.removeAttribute("hidden");
         });
       }
     </script>
